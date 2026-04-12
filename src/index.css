@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;600;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Outfit", sans-serif;
+
+  --color-nexus-bg: #050505;
+  --color-nexus-card: rgba(15, 15, 20, 0.7);
+  --color-nexus-accent: #00f2ff;
+  --color-nexus-accent-dim: rgba(0, 242, 255, 0.1);
+  --color-nexus-border: rgba(255, 255, 255, 0.1);
+  --color-nexus-text-dim: rgba(255, 255, 255, 0.5);
+}
+
+@layer base {
+  body {
+    @apply bg-nexus-bg text-white font-sans antialiased overflow-hidden;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-1;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-nexus-accent/20 rounded-full hover:bg-nexus-accent/40 transition-colors;
+  }
+}
+
+.glass {
+  @apply bg-nexus-card backdrop-blur-xl border border-nexus-border;
+}
+
+.neon-glow {
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.3);
+}
+
+.neon-text {
+  text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scanline::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 242, 255, 0.05) 50%, transparent 100%);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+}
+

@@ -1,0 +1,18 @@
+export enum Module {
+  DASHBOARD = "DASHBOARD",
+  AI_ENGINE = "AI_ENGINE",
+  SOCIAL = "SOCIAL",
+  MARKETING = "MARKETING",
+  NAVIGATION = "NAVIGATION",
+  CREATOR = "CREATOR",
+  DOCS = "DOCS",
+  COMMUNICATION = "COMMUNICATION",
+  SALES = "SALES",
+}
+
+export interface NavItem {
+  id: Module;
+  label: string;
+  icon: string;
+  description: string;
+}
