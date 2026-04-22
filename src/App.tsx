@@ -32,6 +32,7 @@ import { NavigationSystem } from "./components/NavigationSystem";
 import { InstantBuilder } from "./components/InstantBuilder";
 import { SocialControl } from "./components/SocialControl";
 import { DeploymentHub } from "./components/DeploymentHub";
+import { AppSettings } from "./components/AppSettings";
 
 const Dashboard = () => (
   <div className="space-y-8 p-8">
@@ -234,8 +235,16 @@ export default function App() {
         </nav>
 
         <div className="p-4 border-t border-nexus-border">
-          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-nexus-text-dim hover:bg-white/5 hover:text-white transition-all">
-            <Settings className="w-5 h-5" />
+          <button 
+            onClick={() => setActiveModule(Module.SETTINGS)}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300",
+              activeModule === Module.SETTINGS 
+                ? "bg-nexus-accent/10 text-nexus-accent" 
+                : "text-nexus-text-dim hover:bg-white/5 hover:text-white"
+            )}
+          >
+            <Settings className={cn("w-5 h-5", activeModule === Module.SETTINGS && "neon-glow")} />
             {isSidebarOpen && <span className="text-sm font-medium">Settings</span>}
           </button>
           <div className="mt-4 flex items-center gap-3 px-4 py-2">
@@ -295,8 +304,9 @@ export default function App() {
               {activeModule === Module.SOCIAL && <SocialControl />}
               {activeModule === Module.DOCS && <SmartDocs />}
               {activeModule === Module.DEPLOYMENT && <DeploymentHub />}
+              {activeModule === Module.SETTINGS && <AppSettings />}
               
-              {![Module.DASHBOARD, Module.AI_ENGINE, Module.MARKETING, Module.NAVIGATION, Module.CREATOR, Module.SOCIAL, Module.DOCS, Module.DEPLOYMENT].includes(activeModule) && (
+              {![Module.DASHBOARD, Module.AI_ENGINE, Module.MARKETING, Module.NAVIGATION, Module.CREATOR, Module.SOCIAL, Module.DOCS, Module.DEPLOYMENT, Module.SETTINGS].includes(activeModule) && (
                 <div className="flex flex-col items-center justify-center h-full text-center p-8">
                   <Cpu className="w-16 h-16 text-nexus-accent/20 mb-6 animate-pulse" />
                   <h2 className="text-2xl font-display font-bold mb-2">Module Initialization</h2>

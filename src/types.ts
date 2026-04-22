@@ -9,6 +9,7 @@ export enum Module {
   DEPLOYMENT = "DEPLOYMENT",
   COMMUNICATION = "COMMUNICATION",
   SALES = "SALES",
+  SETTINGS = "SETTINGS",
 }
 
 export interface NavItem {

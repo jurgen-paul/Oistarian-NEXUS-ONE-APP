@@ -1,7 +1,27 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, Cpu, Sparkles, Terminal, User, Bot, Loader2, Share2 } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
+import { 
+  Send, 
+  Cpu, 
+  Sparkles, 
+  Terminal, 
+  User, 
+  Bot, 
+  Loader2, 
+  Share2, 
+  Volume2, 
+  Image as ImageIcon, 
+  Zap, 
+  BrainCircuit,
+  MessageSquare,
+  Mic,
+  Camera,
+  Layers,
+  History,
+  X,
+  TrendingUp
+} from "lucide-react";
+import { GoogleGenAI, Modality } from "@google/genai";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/src/lib/utils";
 
@@ -10,15 +30,58 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 interface Message {
   role: "user" | "assistant";
   content: string;
+  type?: "text" | "image" | "audio";
+  attachments?: string[];
+  personality?: PersonalityMode;
 }
+
+type PersonalityMode = "Creative" | "Analytical" | "Professional" | "Stealth";
+
+const Shield = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M20 13c0 5-3.5 7.5-7.66 9.73a1.74 1.74 0 0 1-1.68 0C6.5 20.5 3 18 3 13V5c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v8z"/>
+  </svg>
+);
+
+const PERSONALITIES: Record<PersonalityMode, { icon: any; color: string; instruction: string }> = {
+  Creative: { 
+    icon: Sparkles, 
+    color: "text-purple-400", 
+    instruction: "You are the NEXUS ONE Creative Spark. You think outside the boundaries, using poetic, futuristic metaphors and providing bold, original ideas." 
+  },
+  Analytical: { 
+    icon: BrainCircuit, 
+    color: "text-blue-400", 
+    instruction: "You are the NEXUS ONE Analytical Core. You provide data-driven insights, logical breakdowns, and technical precision. Use structured data and bullet points." 
+  },
+  Professional: { 
+    icon: Shield, 
+    color: "text-green-400", 
+    instruction: "You are the NEXUS ONE Executive Strategist. You are concise, efficient, and business-oriented. Focus on ROI, scalability, and clear action items." 
+  },
+  Stealth: { 
+    icon: Zap, 
+    color: "text-nexus-accent", 
+    instruction: "You are the NEXUS ONE Shadow Operative. You are short, sharp, and highly efficient. You provide exactly what is needed with zero fluff. Futuristic tone." 
+  }
+};
 
 export const AIEngine = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Neural core online. NEXUS ONE Unified AI Engine at your service. How can I assist your digital universe today?" }
+    { 
+      role: "assistant", 
+      content: "Neural core online. NEXUS ONE Unified AI Engine at your service. How can I assist your digital universe today?",
+      personality: "Stealth"
+    }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [personality, setPersonality] = useState<PersonalityMode>("Stealth");
+  const [isCapturingVoice, setIsCapturingVoice] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -26,11 +89,101 @@ export const AIEngine = () => {
     }
   }, [messages]);
 
+  const speakMessage = async (text: string) => {
+    if (isSpeaking) return;
+    setIsSpeaking(true);
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-tts-preview",
+        contents: [{ parts: [{ text: `Say with a futuristic, intelligent tone: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Zephyr' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        const arrayBuffer = Uint8Array.from(atob(base64Audio), c => c.charCodeAt(0)).buffer;
+        const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContextRef.current.destination);
+        source.onended = () => setIsSpeaking(false);
+        source.start(0);
+      } else {
+        setIsSpeaking(false);
+      }
+    } catch (error) {
+      console.error("TTS Error:", error);
+      setIsSpeaking(false);
+    }
+  };
+
+  const generateImage = async (prompt: string) => {
+    setIsGeneratingImage(true);
+    setMessages(prev => [...prev, { role: "user", content: `Generate an image: ${prompt}` }]);
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [
+            { text: `Create a futuristic, high-resolution visual representing: ${prompt}. Cinematic lighting, 8k, nexus-style aesthetic.` },
+          ],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "16:9"
+          }
+        }
+      });
+
+      let foundImage = false;
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+          setMessages(prev => [...prev, { 
+            role: "assistant", 
+            content: "Visual synthesis complete. Here is the generated neural asset.",
+            type: "image",
+            attachments: [imageUrl],
+            personality
+          }]);
+          foundImage = true;
+          break;
+        }
+      }
+      if (!foundImage) throw new Error("No image data found");
+    } catch (error) {
+      console.error("Image Gen Error:", error);
+      setMessages(prev => [...prev, { role: "assistant", content: "Visual synthesis failed. Neural link too weak for image transmission.", personality }]);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
     const userMessage = input.trim();
     setInput("");
+
+    // Special command handling
+    if (userMessage.toLowerCase().startsWith("/image") || userMessage.toLowerCase().startsWith("generate image")) {
+      const prompt = userMessage.replace(/^(\/image|generate image)\s*/i, "");
+      if (prompt) {
+        generateImage(prompt);
+        return;
+      }
+    }
+
     setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
@@ -42,15 +195,15 @@ export const AIEngine = () => {
           parts: [{ text: m.content }]
         })),
         config: {
-          systemInstruction: "You are the NEXUS ONE Unified AI Engine, a hyper-advanced digital co-pilot. You are professional, efficient, and forward-thinking. You help users with marketing, social media, content creation, business management, and more. Your tone is futuristic and intelligent."
+          systemInstruction: `${PERSONALITIES[personality].instruction} You are part of the NEXUS ONE ecosystem. Professional, efficient, and forward-thinking. Always keep a futuristic tone.`
         }
       });
 
       const assistantMessage = response.text || "I encountered a neural synchronization error. Please retry.";
-      setMessages(prev => [...prev, { role: "assistant", content: assistantMessage }]);
+      setMessages(prev => [...prev, { role: "assistant", content: assistantMessage, personality }]);
     } catch (error) {
       console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: "assistant", content: "Neural link interrupted. Check your connection or API configuration." }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Neural link interrupted. Check your connection or API configuration.", personality }]);
     } finally {
       setIsLoading(false);
     }
@@ -65,12 +218,29 @@ export const AIEngine = () => {
           </div>
           <div>
             <h2 className="text-xl font-display font-bold">Unified AI Engine</h2>
-            <p className="text-xs text-nexus-text-dim font-mono">CORE VERSION: 2.5.0-STABLE</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-[10px] text-nexus-text-dim font-mono uppercase tracking-widest">Protocol V3.2</p>
+              <div className="w-1 h-1 rounded-full bg-nexus-accent animate-ping" />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-green-500">SYNCHRONIZED</span>
+        
+        <div className="flex items-center gap-2">
+          {(Object.entries(PERSONALITIES) as [PersonalityMode, any][]).map(([id, config]) => (
+            <button
+              key={id}
+              onClick={() => setPersonality(id)}
+              className={cn(
+                "p-2 rounded-lg transition-all border",
+                personality === id 
+                  ? `bg-white/10 border-nexus-accent text-white shadow-[0_0_10px_rgba(5,255,161,0.1)]` 
+                  : "bg-white/5 border-white/5 text-nexus-text-dim hover:border-white/10"
+              )}
+              title={`${id} Mode`}
+            >
+              <config.icon className={cn("w-4 h-4", personality === id && config.color)} />
+            </button>
+          ))}
         </div>
       </header>
 
@@ -85,32 +255,69 @@ export const AIEngine = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                "flex gap-4",
+                "flex gap-4 group",
                 msg.role === "user" ? "flex-row-reverse" : "flex-row"
               )}
             >
               <div className={cn(
-                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-1",
                 msg.role === "user" ? "bg-white/10" : "bg-nexus-accent/20 border border-nexus-accent/30"
               )}>
-                {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-nexus-accent" />}
-              </div>
-              <div className={cn(
-                "max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed",
-                msg.role === "user" 
-                  ? "bg-white/5 border border-white/10 rounded-tr-none" 
-                  : "glass rounded-tl-none prose prose-invert prose-sm max-w-none"
-              )}>
-                {msg.role === "assistant" ? (
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                {msg.role === "user" ? (
+                  <User className="w-4 h-4" />
                 ) : (
-                  msg.content
+                  msg.personality ? (
+                    <div className={PERSONALITIES[msg.personality].color}>
+                      {(() => {
+                        const Icon = PERSONALITIES[msg.personality].icon;
+                        return <Icon className="w-4 h-4" />;
+                      })()}
+                    </div>
+                  ) : <Bot className="w-4 h-4 text-nexus-accent" />
                 )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className={cn(
+                  "max-w-[90%] p-4 rounded-2xl text-sm leading-relaxed relative",
+                  msg.role === "user" 
+                    ? "ml-auto bg-white/5 border border-white/10 rounded-tr-none" 
+                    : "glass rounded-tl-none prose prose-invert prose-sm max-w-none shadow-[0_0_20px_rgba(0,0,0,0.3)]"
+                )}>
+                  {msg.type === "image" && msg.attachments?.[0] ? (
+                    <div className="space-y-3">
+                      <div className="relative group/img overflow-hidden rounded-xl border border-white/10">
+                        <img src={msg.attachments[0]} alt="Neural Generated" className="w-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                          <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg backdrop-blur-md">
+                            <Share2 className="w-4 h-4" />
+                          </button>
+                          <button className="p-2 bg-nexus-accent text-black rounded-lg">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-nexus-text-dim italic">{msg.content}</p>
+                    </div>
+                  ) : msg.role === "assistant" ? (
+                    <div className="relative">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <button 
+                        onClick={() => speakMessage(msg.content)}
+                        className="absolute -right-2 -bottom-2 p-1.5 rounded-lg bg-black/40 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity hover:text-nexus-accent"
+                      >
+                        <Volume2 className={cn("w-3 h-3", isSpeaking && "animate-pulse")} />
+                      </button>
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
-        {isLoading && (
+        
+        {(isLoading || isGeneratingImage) && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -119,56 +326,105 @@ export const AIEngine = () => {
             <div className="w-8 h-8 rounded-lg bg-nexus-accent/20 border border-nexus-accent/30 flex items-center justify-center">
               <Loader2 className="w-4 h-4 text-nexus-accent animate-spin" />
             </div>
-            <div className="glass p-4 rounded-2xl rounded-tl-none">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-nexus-accent/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-nexus-accent/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-nexus-accent/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+            <div className="glass p-4 rounded-2xl rounded-tl-none min-w-[200px]">
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-mono text-nexus-accent uppercase tracking-widest animate-pulse">
+                  {isGeneratingImage ? "SYNTHESIZING VISUAl ASSET..." : "SYNCING NEURAL CORE..."}
+                </span>
+                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-nexus-accent"
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                </div>
               </div>
             </div>
           </motion.div>
         )}
       </div>
 
-      <div className="mt-6 relative">
-        <div className="absolute inset-0 bg-nexus-accent/5 blur-xl rounded-full opacity-50" />
-        <div className="relative glass p-2 rounded-2xl flex items-center gap-2">
-          <div className="p-2 text-nexus-text-dim">
-            <Terminal className="w-5 h-5" />
-          </div>
+      <div className="mt-6">
+        <div className="relative glass p-2 rounded-2xl flex items-center gap-2 border border-white/10 group focus-within:border-nexus-accent/30 transition-all">
+          <button className="p-3 text-nexus-text-dim hover:text-white transition-colors relative">
+            <Plus className="w-5 h-5" />
+            <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-nexus-accent rounded-full animate-ping" />
+          </button>
           <input 
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Execute command or ask anything..."
+            placeholder={isGeneratingImage ? "Describing neural asset..." : "Initiate command interface..."}
             className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-nexus-text-dim py-2"
           />
+          <div className="flex items-center gap-1 pr-2">
+            <button 
+              onClick={() => setIsCapturingVoice(!isCapturingVoice)}
+              className={cn(
+                "p-2 rounded-xl transition-all",
+                isCapturingVoice ? "bg-red-500/20 text-red-400 animate-pulse" : "hover:bg-white/5 text-nexus-text-dim"
+              )}
+            >
+              <Mic className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setInput("/image ")}
+              className="p-2 hover:bg-white/5 text-nexus-text-dim transition-all rounded-xl"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+          </div>
           <button 
             onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            className="p-3 bg-nexus-accent text-black rounded-xl hover:bg-white transition-all disabled:opacity-50 disabled:hover:bg-nexus-accent"
+            disabled={isLoading || isGeneratingImage || !input.trim()}
+            className="p-3 bg-nexus-accent text-black rounded-xl hover:bg-white transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(5,255,161,0.2)]"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
-        <div className="mt-3 flex gap-4 justify-center">
-          {[
-            { label: "Market Analysis", icon: Sparkles },
-            { label: "Content Strategy", icon: Share2 },
-            { label: "Code Optimization", icon: Cpu }
-          ].map((suggestion, i) => (
-            <button 
-              key={i}
-              onClick={() => setInput(suggestion.label)}
-              className="text-[10px] font-mono uppercase tracking-widest text-nexus-text-dim hover:text-nexus-accent transition-colors flex items-center gap-1"
-            >
-              <suggestion.icon className="w-3 h-3" />
-              {suggestion.label}
-            </button>
-          ))}
+        
+        <div className="mt-4 flex items-center justify-between px-2">
+          <div className="flex gap-4">
+            {[
+              { label: "Market Intel", icon: TrendingUp },
+              { label: "Neural Image", icon: ImageIcon, cmd: "/image futuristic city" },
+              { label: "Strategy", icon: Layers }
+            ].map((suggestion, i) => (
+              <button 
+                key={i}
+                onClick={() => setInput(suggestion.cmd || suggestion.label)}
+                className="text-[10px] font-mono uppercase tracking-widest text-nexus-text-dim hover:text-nexus-accent transition-colors flex items-center gap-2 group/sug"
+              >
+                <suggestion.icon className="w-3 h-3 group-hover/sug:scale-110 transition-transform" />
+                {suggestion.label}
+              </button>
+            ))}
+          </div>
+          <button className="text-[10px] font-mono uppercase tracking-widest text-nexus-text-dim hover:text-white flex items-center gap-1 group">
+            <History className="w-3 h-3 transition-transform group-hover:rotate-12" />
+            Neural History
+          </button>
         </div>
       </div>
     </div>
   );
 };
+
+const Plus = ({ className }: { className?: string }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    width="24" 
+    height="24" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M5 12h14" /><path d="M12 5v14" />
+  </svg>
+);
