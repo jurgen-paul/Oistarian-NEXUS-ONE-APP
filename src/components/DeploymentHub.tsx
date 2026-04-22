@@ -11,10 +11,12 @@ import {
   Zap,
   Server,
   Activity,
-  Smartphone
+  Smartphone,
+  AppWindow
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { PlayStoreIntegration } from "./PlayStoreIntegration";
+import { AppStoreIntegration } from "./AppStoreIntegration";
 
 interface Deployment {
   id: string;
@@ -66,7 +68,7 @@ const MOCK_DEPLOYMENTS: Deployment[] = [
 ];
 
 export const DeploymentHub = () => {
-  const [activeTab, setActiveTab] = useState<"global" | "mobile">("global");
+  const [activeTab, setActiveTab] = useState<"global" | "google" | "apple">("global");
 
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
@@ -90,17 +92,27 @@ export const DeploymentHub = () => {
               )}
             >
               <Globe className="w-4 h-4" />
-              Global Nodes
+              Global
             </button>
             <button 
-              onClick={() => setActiveTab("mobile")}
+              onClick={() => setActiveTab("google")}
               className={cn(
                 "px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2",
-                activeTab === "mobile" ? "bg-nexus-accent text-black shadow-[0_0_15px_rgba(5,255,161,0.3)]" : "text-nexus-text-dim hover:text-white"
+                activeTab === "google" ? "bg-green-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.3)]" : "text-nexus-text-dim hover:text-white"
               )}
             >
               <Smartphone className="w-4 h-4" />
-              Mobile Matrix
+              Play Store
+            </button>
+            <button 
+              onClick={() => setActiveTab("apple")}
+              className={cn(
+                "px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2",
+                activeTab === "apple" ? "bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]" : "text-nexus-text-dim hover:text-white"
+              )}
+            >
+              <AppWindow className="w-4 h-4" />
+              App Store
             </button>
           </div>
           <div className="glass px-4 py-2 rounded-xl flex items-center gap-3">
@@ -268,14 +280,23 @@ export const DeploymentHub = () => {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : activeTab === "google" ? (
           <motion.div
-            key="mobile"
+            key="google"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
           >
             <PlayStoreIntegration />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="apple"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <AppStoreIntegration />
           </motion.div>
         )}
       </AnimatePresence>
