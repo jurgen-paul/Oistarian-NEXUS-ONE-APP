@@ -31,6 +31,7 @@ import { MarketingSuite } from "./components/MarketingSuite";
 import { NavigationSystem } from "./components/NavigationSystem";
 import { InstantBuilder } from "./components/InstantBuilder";
 import { SocialControl } from "./components/SocialControl";
+import { DeploymentHub } from "./components/DeploymentHub";
 
 const Dashboard = () => (
   <div className="space-y-8 p-8">
@@ -153,6 +154,9 @@ const SmartDocs = () => (
                 <Eye className="w-4 h-4" />
               </button>
               <button className="p-2 rounded-lg hover:bg-white/5 text-nexus-text-dim hover:text-white transition-colors">
+                <Cloud className="w-4 h-4" />
+              </button>
+              <button className="p-2 rounded-lg hover:bg-white/5 text-nexus-text-dim hover:text-white transition-colors">
                 <Download className="w-4 h-4" />
               </button>
             </div>
@@ -193,6 +197,7 @@ export default function App() {
     { id: Module.MARKETING, label: "Marketing Suite", icon: TrendingUp },
     { id: Module.NAVIGATION, label: "Navigation Sys", icon: Navigation },
     { id: Module.CREATOR, label: "Instant Builder", icon: BookOpen },
+    { id: Module.DEPLOYMENT, label: "Deployment Hub", icon: Cloud },
     { id: Module.DOCS, label: "Smart Forms", icon: FileText },
     { id: Module.COMMUNICATION, label: "Mail Hub", icon: Mail },
     { id: Module.SALES, label: "Sales Intelligence", icon: BarChart3 },
@@ -289,8 +294,9 @@ export default function App() {
               {activeModule === Module.CREATOR && <InstantBuilder />}
               {activeModule === Module.SOCIAL && <SocialControl />}
               {activeModule === Module.DOCS && <SmartDocs />}
+              {activeModule === Module.DEPLOYMENT && <DeploymentHub />}
               
-              {![Module.DASHBOARD, Module.AI_ENGINE, Module.MARKETING, Module.NAVIGATION, Module.CREATOR, Module.SOCIAL, Module.DOCS].includes(activeModule) && (
+              {![Module.DASHBOARD, Module.AI_ENGINE, Module.MARKETING, Module.NAVIGATION, Module.CREATOR, Module.SOCIAL, Module.DOCS, Module.DEPLOYMENT].includes(activeModule) && (
                 <div className="flex flex-col items-center justify-center h-full text-center p-8">
                   <Cpu className="w-16 h-16 text-nexus-accent/20 mb-6 animate-pulse" />
                   <h2 className="text-2xl font-display font-bold mb-2">Module Initialization</h2>

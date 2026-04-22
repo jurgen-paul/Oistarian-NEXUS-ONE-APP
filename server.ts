@@ -1,0 +1,194 @@
+import express from "express";
+import { createServer as createViteServer } from "vite";
+import path from "path";
+import { fileURLToPath } from "url";
+import cookieParser from "cookie-parser";
+import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json());
+  app.use(cookieParser());
+
+  // --- OAuth Configuration ---
+  const OAUTH_CONFIGS: Record<string, any> = {
+    linkedin: {
+      authUrl: "https://www.linkedin.com/oauth/v2/authorization",
+      tokenUrl: "https://www.linkedin.com/oauth/v2/accessToken",
+      clientId: process.env.LINKEDIN_CLIENT_ID,
+      clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
+      scope: "r_liteprofile r_emailaddress w_member_social",
+    },
+    google: {
+      authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      scope: "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/userinfo.profile",
+    },
+    github: {
+      authUrl: "https://github.com/login/oauth/authorize",
+      tokenUrl: "https://github.com/login/oauth/access_token",
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      scope: "user repo",
+    }
+  };
+
+  // --- API Routes ---
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // Get Auth URL for a provider
+  app.get("/api/auth/:provider/url", (req, res) => {
+    const { provider } = req.params;
+    const config = OAUTH_CONFIGS[provider];
+
+    if (!config) {
+      return res.status(400).json({ error: "Unsupported provider" });
+    }
+
+    if (!config.clientId) {
+      return res.status(400).json({ error: `Missing CLIENT_ID for ${provider}` });
+    }
+
+    const redirectUri = `${process.env.APP_URL || `http://localhost:${PORT}`}/auth/callback/${provider}`;
+    
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: config.scope,
+      state: Math.random().toString(36).substring(7),
+    });
+
+    // Google specific params
+    if (provider === "google") {
+      params.append("access_type", "offline");
+      params.append("prompt", "consent");
+    }
+
+    res.json({ url: `${config.authUrl}?${params.toString()}` });
+  });
+
+  // OAuth Callback Handler
+  app.get(["/auth/callback/:provider", "/auth/callback/:provider/"], async (req, res) => {
+    const { provider } = req.params;
+    const { code } = req.query;
+    const config = OAUTH_CONFIGS[provider];
+
+    if (!config || !code) {
+      return res.status(400).send("Invalid callback parameters");
+    }
+
+    try {
+      const redirectUri = `${process.env.APP_URL || `http://localhost:${PORT}`}/auth/callback/${provider}`;
+      
+      const tokenResponse = await axios.post(config.tokenUrl, null, {
+        params: {
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: redirectUri,
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+        },
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const tokens = tokenResponse.data;
+      
+      // In a real app, you'd store these tokens in a database or secure cookie
+      // For this demo, we'll just send a success message back to the client
+      
+      res.send(`
+        <html>
+          <body style="background: #0f0f14; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+            <div style="text-align: center; padding: 2rem; border-radius: 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(0,242,255,0.3);">
+              <h2 style="color: #00f2ff; margin-bottom: 1rem;">Neural Link Established</h2>
+              <p style="color: rgba(255,255,255,0.6);">Synchronizing ${provider} account with NEXUS ONE...</p>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ 
+                    type: 'OAUTH_AUTH_SUCCESS', 
+                    provider: '${provider}',
+                    tokens: ${JSON.stringify(tokens)} 
+                  }, '*');
+                  setTimeout(() => window.close(), 2000);
+                } else {
+                  window.location.href = '/';
+                }
+              </script>
+            </div>
+          </body>
+        </html>
+      `);
+    } catch (error: any) {
+      console.error(`OAuth Error (${provider}):`, error.response?.data || error.message);
+      res.status(500).send(`Authentication failed: ${error.message}`);
+    }
+  });
+
+  // YouTube Live Stream Initiation (Mock Implementation)
+  app.post("/api/youtube/live-stream", async (req, res) => {
+    const { title, description, privacyStatus, scheduledStartTime, tokens } = req.body;
+
+    if (!tokens || !tokens.access_token) {
+      return res.status(401).json({ error: "Unauthorized: Missing YouTube tokens" });
+    }
+
+    try {
+      // In a real implementation, you would use the YouTube Data API v3
+      // to create a liveBroadcast and a liveStream, then bind them.
+      // Here we simulate the process for the NEXUS ONE interface.
+      
+      console.log(`[YouTube Live] Initiating stream: ${title}`);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      res.json({ 
+        success: true, 
+        streamId: `nexus-live-${Math.random().toString(36).substring(7)}`,
+        status: "created",
+        ingestionAddress: `rtmp://a.rtmp.youtube.com/live2`,
+        streamKey: `nexus-key-${Math.random().toString(36).substring(7)}`,
+        message: "Neural live stream broadcast initialized successfully."
+      });
+    } catch (error: any) {
+      console.error("YouTube Live Stream Error:", error.message);
+      res.status(500).json({ error: "Failed to initialize live stream" });
+    }
+  });
+
+  // --- Vite Middleware ---
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`NEXUS ONE Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

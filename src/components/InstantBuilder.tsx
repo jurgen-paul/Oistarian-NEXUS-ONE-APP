@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { BookOpen, Globe, Wand2, Layout, Type, Image as ImageIcon, Loader2, CheckCircle2, ArrowRight, Cpu } from "lucide-react";
+import { BookOpen, Globe, Wand2, Layout, Type, Image as ImageIcon, Loader2, CheckCircle2, ArrowRight, Cpu, ExternalLink } from "lucide-react";
 import { GoogleGenAI, Type as GenAIType } from "@google/genai";
 import { cn } from "@/src/lib/utils";
 
@@ -18,6 +18,8 @@ export const InstantBuilder = () => {
   const [type, setType] = useState<CreatorType>("WEBSITE");
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deploymentStatus, setDeploymentStatus] = useState<"IDLE" | "PREPARING" | "UPLOADING" | "LIVE">("IDLE");
   const [result, setResult] = useState<GeneratedContent | null>(null);
 
   const handleGenerate = async () => {
@@ -68,6 +70,23 @@ export const InstantBuilder = () => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleDeploy = async () => {
+    if (!result || isDeploying) return;
+    setIsDeploying(true);
+    setDeploymentStatus("PREPARING");
+    
+    // Simulated deployment sequence
+    await new Promise(r => setTimeout(r, 1500));
+    setDeploymentStatus("UPLOADING");
+    await new Promise(r => setTimeout(r, 2000));
+    setDeploymentStatus("LIVE");
+    
+    setTimeout(() => {
+      setIsDeploying(false);
+      setDeploymentStatus("IDLE");
+    }, 3000);
   };
 
   return (
@@ -242,11 +261,48 @@ export const InstantBuilder = () => {
                       ADD IMAGES
                     </button>
                   </div>
-                  <button className="px-6 py-2 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:bg-nexus-accent transition-all">
-                    DEPLOY ASSET
-                    <ArrowRight className="w-4 h-4" />
+                  <button 
+                    onClick={handleDeploy}
+                    disabled={isDeploying}
+                    className="px-6 py-2 bg-white text-black font-bold rounded-xl flex items-center gap-2 hover:bg-nexus-accent transition-all disabled:opacity-50 min-w-[160px] justify-center"
+                  >
+                    {isDeploying ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {deploymentStatus === "PREPARING" && "PREPARING..."}
+                        {deploymentStatus === "UPLOADING" && "UPLOADING..."}
+                        {deploymentStatus === "LIVE" && "LIVE!"}
+                      </>
+                    ) : (
+                      <>
+                        DEPLOY ASSET
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
                 </div>
+
+                <AnimatePresence>
+                  {deploymentStatus === "LIVE" && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="bg-green-500/10 border-t border-green-500/20 p-4 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        <div>
+                          <p className="text-xs font-bold text-green-500 uppercase tracking-widest">Deployment Successful</p>
+                          <p className="text-[10px] text-nexus-text-dim">Your {type.toLowerCase()} is now live on the global edge network.</p>
+                        </div>
+                      </div>
+                      <button className="flex items-center gap-2 text-[10px] font-bold text-white hover:text-nexus-accent transition-colors">
+                        VIEW LIVE <ExternalLink className="w-3 h-3" />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
           </AnimatePresence>
