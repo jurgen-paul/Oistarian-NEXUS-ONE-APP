@@ -35,7 +35,10 @@ import {
   Save,
   Bookmark,
   History,
-  Activity
+  Activity,
+  Type,
+  AlignLeft,
+  Monitor
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { GoogleGenAI } from "@google/genai";
@@ -105,12 +108,27 @@ export const SocialControl = () => {
     const saved = localStorage.getItem("nexus_presets");
     return saved ? JSON.parse(saved) : [];
   });
+  const [platformPresets, setPlatformPresets] = useState<Record<string, {name: string, config: any}[]>>(() => {
+    const saved = localStorage.getItem("nexus_platform_presets");
+    return saved ? JSON.parse(saved) : {
+      youtube: [],
+      linkedin: [],
+      twitter: [],
+      instagram: [],
+      facebook: []
+    } as any;
+  });
+
   const [newPresetName, setNewPresetName] = useState("");
   const [showPresetSave, setShowPresetSave] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("nexus_presets", JSON.stringify(presets));
   }, [presets]);
+
+  useEffect(() => {
+    localStorage.setItem("nexus_platform_presets", JSON.stringify(platformPresets));
+  }, [platformPresets]);
 
   const savePreset = () => {
     if (!newPresetName.trim()) return;
@@ -133,43 +151,83 @@ export const SocialControl = () => {
     setPresets(prev => prev.filter(p => p.name !== name));
   };
 
+  const savePlatformPreset = (platform: string, name: string) => {
+    if (!name.trim()) return;
+    const config = JSON.parse(JSON.stringify(platformConfigs[platform]));
+    setPlatformPresets(prev => ({
+      ...prev,
+      [platform]: [...(prev[platform] || []), { name: name.trim(), config }]
+    }));
+  };
+
+  const loadPlatformPreset = (platform: string, config: any) => {
+    setPlatformConfigs(prev => ({
+      ...prev,
+      [platform]: JSON.parse(JSON.stringify(config))
+    }));
+  };
+
+  const deletePlatformPreset = (platform: string, name: string) => {
+    setPlatformPresets(prev => ({
+      ...prev,
+      [platform]: (prev[platform] || []).filter(p => p.name !== name)
+    }));
+  };
+
+  const [platformPresetNaming, setPlatformPresetNaming] = useState<string | null>(null);
+  const [tempPlatformPresetName, setTempPlatformPresetName] = useState("");
+
   const [generatorPrompt, setGeneratorPrompt] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [showSummaryInput, setShowSummaryInput] = useState(false);
+  const [longContentText, setLongContentText] = useState("");
   const [generatorMode, setGeneratorMode] = useState<"ideas" | "summarize">("ideas");
   const [isGeneratingIdeas, setIsGeneratingIdeas] = useState(false);
   const [generatedIdeas, setGeneratedIdeas] = useState<{ idea: string; caption: string; hashtags: string }[]>([]);
 
   const summarizeContent = async () => {
-    if (!generatorPrompt) return;
+    const textToSummarize = activeTab === "generator" ? generatorPrompt : longContentText;
+    if (!textToSummarize) return;
     setIsSummarizing(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const prompt = `Summarize the following long-form content into two distinct social media captions: 
-      1. A short, punchy caption for Twitter (X) under 280 characters.
-      2. A more professional, detailed caption for LinkedIn.
+      const prompt = `Summarize the following long-form content into high-impact social media captions optimized for the NEXUS ONE platform. 
+      You MUST provide exactly two variations:
+      1. A short, punchy variation for Twitter/X (under 280 characters).
+      2. A more professional, authority-building version for LinkedIn.
       
-      Content to summarize: "${generatorPrompt}"
+      Content to summarize: "${textToSummarize}"
       
-      Format the response as a JSON array of 2 objects with keys: "platform" (e.g., "Twitter", "LinkedIn"), "caption", and "hashtags".`;
+      Tone: Futuristic, Professional, Thought-Leader, Direct.
+      
+      Format the response as a JSON array of 2 objects with keys: 
+      "platform": "Twitter" or "LinkedIn"
+      "idea": A short label for this variation
+      "caption": The synthesized caption
+      "hashtags": 2-3 relevant hashtags (as a string)
+      `;
 
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
-          systemInstruction: "You are the NEXUS ONE Content Summarizer. You distill long content into high-impact social media captions."
+          systemInstruction: "You are the NEXUS ONE Content Distiller. You perform hyper-efficient neural summarization for maximum social engagement."
         }
       });
 
       const data = JSON.parse(response.text || "[]");
-      const mappedIdeas = data.map((item: any) => ({
-        idea: `${item.platform} Summary`,
-        caption: item.caption,
-        hashtags: item.hashtags
-      }));
-      setGeneratedIdeas(mappedIdeas);
+      if (activeTab === "generator") {
+        setGeneratedIdeas(data);
+      } else {
+        // If in modal, we can pick the best one or just join them
+        const combined = data.map((d: any) => `[${d.platform} Variation]\n${d.caption}\n\n${d.hashtags}`).join("\n\n---\n\n");
+        setNewPostTitle(combined);
+        setShowSummaryInput(false);
+        setLongContentText("");
+      }
     } catch (error) {
-      console.error("Summarization Error:", error);
+      console.error("Neural Summarization Error:", error);
     } finally {
       setIsSummarizing(false);
     }
@@ -238,7 +296,7 @@ export const SocialControl = () => {
     twitter: { charLimit: 280, thread: false },
     instagram: { ratio: "1:1", autoCrop: true },
     linkedin: { 
-      visibility: "Anyone",
+      visibility: "Public",
       isLive: false,
       description: "",
       streamTitle: "",
@@ -340,7 +398,7 @@ export const SocialControl = () => {
       twitter: { charLimit: 280, thread: false },
       instagram: { ratio: "1:1", autoCrop: true },
       linkedin: { 
-        visibility: "Anyone",
+        visibility: "Public",
         isLive: false,
         description: "",
         streamTitle: "",
@@ -359,6 +417,17 @@ export const SocialControl = () => {
       }
     });
     setIsModalOpen(true);
+  };
+
+  const syncStreamFields = (platform: "youtube" | "linkedin") => {
+    setPlatformConfigs(prev => ({
+      ...prev,
+      [platform]: {
+        ...prev[platform],
+        streamTitle: prev[platform].streamTitle || newPostTitle,
+        description: prev[platform].description || "Neural Broadcast from NEXUS ONE system."
+      }
+    }));
   };
 
   const handleSave = (status: "Scheduled" | "Draft") => {
@@ -393,7 +462,7 @@ export const SocialControl = () => {
       twitter: { charLimit: 280, thread: false },
       instagram: { ratio: "1:1", autoCrop: true },
       linkedin: { 
-        visibility: "Anyone",
+        visibility: "Public",
         isLive: false,
         description: "",
         streamTitle: "",
@@ -1224,24 +1293,65 @@ export const SocialControl = () => {
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <label className="text-xs font-mono text-nexus-text-dim uppercase tracking-widest block">Post Content / Title</label>
-                    <button 
-                      onClick={generateAICaption}
-                      disabled={isGeneratingCaption || (!newPostTitle && attachedMedia.length === 0)}
-                      className="flex items-center gap-2 text-[10px] font-bold text-nexus-accent hover:text-white transition-colors disabled:opacity-50"
-                    >
-                      {isGeneratingCaption ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3 h-3" />
-                      )}
-                      AI GENERATE CAPTION
-                    </button>
+                    <div className="flex gap-4">
+                      <button 
+                        onClick={() => setShowSummaryInput(!showSummaryInput)}
+                        className="flex items-center gap-2 text-[10px] font-bold text-nexus-text-dim hover:text-white transition-colors"
+                      >
+                        <Activity className="w-3 h-3" />
+                        SUMMARIZE LONG CONTENT
+                      </button>
+                      <button 
+                        onClick={generateAICaption}
+                        disabled={isGeneratingCaption || (!newPostTitle && attachedMedia.length === 0)}
+                        className="flex items-center gap-2 text-[10px] font-bold text-nexus-accent hover:text-white transition-colors disabled:opacity-50"
+                      >
+                        {isGeneratingCaption ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}
+                        AI GENERATE CAPTION
+                      </button>
+                    </div>
                   </div>
+
+                  <AnimatePresence>
+                    {showSummaryInput && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="mb-4 space-y-3 overflow-hidden"
+                      >
+                        <textarea 
+                          value={longContentText}
+                          onChange={(e) => setLongContentText(e.target.value)}
+                          placeholder="Paste the long article or post content here to be distilled by Nexus AI..."
+                          className="w-full h-32 bg-nexus-accent/5 border border-nexus-accent/20 rounded-2xl p-4 text-xs outline-none focus:border-nexus-accent/50 transition-colors resize-none"
+                        />
+                        <div className="flex justify-between items-center bg-nexus-accent/5 p-3 rounded-xl border border-nexus-accent/10">
+                          <p className="text-[10px] text-nexus-text-dim font-mono italic">
+                            Nexus AI will generate platform-balanced summaries for Twitter and LinkedIn.
+                          </p>
+                          <button 
+                            onClick={summarizeContent}
+                            disabled={isSummarizing || !longContentText}
+                            className="px-4 py-1.5 bg-nexus-accent text-black text-[10px] font-bold rounded-lg hover:bg-white transition-all disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {isSummarizing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                            START DISTILLATION
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <textarea 
                     value={newPostTitle}
                     onChange={(e) => setNewPostTitle(e.target.value)}
                     placeholder="What's the message for the digital universe?"
-                    className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm outline-none focus:border-nexus-accent/50 transition-colors resize-none"
+                    className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm outline-none focus:border-nexus-accent/50 transition-colors resize-none"
                   />
                 </div>
 
@@ -1395,11 +1505,59 @@ export const SocialControl = () => {
 
                     <div className="space-y-3">
                       {selectedPlatforms.includes("twitter") && (
-                        <div className="p-4 rounded-2xl bg-blue-400/5 border border-blue-400/10 space-y-3">
-                          <div className="flex items-center gap-2 text-blue-400">
-                            <Twitter className="w-4 h-4" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Twitter / X Settings</span>
+                        <div className="p-4 rounded-2xl bg-blue-400/5 border border-blue-400/10 space-y-3 relative overflow-hidden group">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-blue-400">
+                              <Twitter className="w-4 h-4" />
+                              <span className="text-xs font-bold uppercase tracking-wider">Twitter / X Settings</span>
+                            </div>
+                            <div className="flex gap-2">
+                              {(platformPresets.twitter || []).length > 0 && (
+                                <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
+                                  {(platformPresets.twitter || []).map(p => (
+                                    <button
+                                      key={p.name}
+                                      onClick={() => loadPlatformPreset("twitter", p.config)}
+                                      className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all text-nexus-text-dim hover:text-white"
+                                      title={`Load ${p.name}`}
+                                    >
+                                      {p.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <button 
+                                onClick={() => {
+                                  if (platformPresetNaming === "twitter") {
+                                    savePlatformPreset("twitter", tempPlatformPresetName);
+                                    setPlatformPresetNaming(null);
+                                    setTempPlatformPresetName("");
+                                  } else {
+                                    setPlatformPresetNaming("twitter");
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
+                              >
+                                {platformPresetNaming === "twitter" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+                              </button>
+                            </div>
                           </div>
+
+                          {platformPresetNaming === "twitter" && (
+                            <div className="absolute inset-x-0 top-0 bg-blue-400/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
+                              <input 
+                                type="text"
+                                autoFocus
+                                value={tempPlatformPresetName}
+                                onChange={(e) => setTempPlatformPresetName(e.target.value)}
+                                placeholder="Preset Name"
+                                className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
+                              />
+                              <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] text-nexus-text-dim uppercase">Character Limit</span>
                             <select 
@@ -1415,11 +1573,59 @@ export const SocialControl = () => {
                       )}
 
                       {selectedPlatforms.includes("instagram") && (
-                        <div className="p-4 rounded-2xl bg-pink-500/5 border border-pink-500/10 space-y-3">
-                          <div className="flex items-center gap-2 text-pink-500">
-                            <Instagram className="w-4 h-4" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Instagram Settings</span>
+                        <div className="p-4 rounded-2xl bg-pink-500/5 border border-pink-500/10 space-y-3 relative overflow-hidden group">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-pink-500">
+                              <Instagram className="w-4 h-4" />
+                              <span className="text-xs font-bold uppercase tracking-wider">Instagram Settings</span>
+                            </div>
+                            <div className="flex gap-2">
+                              {(platformPresets.instagram || []).length > 0 && (
+                                <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
+                                  {(platformPresets.instagram || []).map(p => (
+                                    <button
+                                      key={p.name}
+                                      onClick={() => loadPlatformPreset("instagram", p.config)}
+                                      className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-pink-500/50 hover:bg-pink-500/10 transition-all text-nexus-text-dim hover:text-white"
+                                      title={`Load ${p.name}`}
+                                    >
+                                      {p.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <button 
+                                onClick={() => {
+                                  if (platformPresetNaming === "instagram") {
+                                    savePlatformPreset("instagram", tempPlatformPresetName);
+                                    setPlatformPresetNaming(null);
+                                    setTempPlatformPresetName("");
+                                  } else {
+                                    setPlatformPresetNaming("instagram");
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
+                              >
+                                {platformPresetNaming === "instagram" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+                              </button>
+                            </div>
                           </div>
+
+                          {platformPresetNaming === "instagram" && (
+                            <div className="absolute inset-x-0 top-0 bg-pink-500/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
+                              <input 
+                                type="text"
+                                autoFocus
+                                value={tempPlatformPresetName}
+                                onChange={(e) => setTempPlatformPresetName(e.target.value)}
+                                placeholder="Preset Name"
+                                className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
+                              />
+                              <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] text-nexus-text-dim uppercase">Image Ratio</span>
                             <div className="flex gap-2">
@@ -1446,6 +1652,10 @@ export const SocialControl = () => {
                         <div className="p-4 rounded-2xl bg-red-500/5 border border-red-500/10 space-y-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-red-500">
+                              <div className={cn(
+                                "w-2 h-2 rounded-full",
+                                platformConfigs.youtube.isLive ? "bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "bg-red-500/20"
+                              )} />
                               <Youtube className="w-4 h-4" />
                               <span className="text-xs font-bold uppercase tracking-wider">YouTube Settings</span>
                             </div>
@@ -1453,7 +1663,7 @@ export const SocialControl = () => {
                               onClick={() => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, isLive: !prev.youtube.isLive } }))}
                               className={cn(
                                 "px-3 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-2",
-                                platformConfigs.youtube.isLive ? "bg-red-500 text-white border-red-500" : "bg-white/5 border-white/5 text-nexus-text-dim"
+                                platformConfigs.youtube.isLive ? "bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/20" : "bg-white/5 border-white/5 text-nexus-text-dim hover:border-red-500/30"
                               )}
                             >
                               <Play className="w-3 h-3" />
@@ -1462,70 +1672,162 @@ export const SocialControl = () => {
                           </div>
                           
                           {platformConfigs.youtube.isLive && (
-                            <div className="space-y-4 p-4 bg-black/20 rounded-xl border border-white/5">
-                              <div>
-                                <label className="text-[10px] text-nexus-text-dim uppercase mb-2 block font-mono">Stream Title</label>
-                                <input 
-                                  type="text"
-                                  value={platformConfigs.youtube.streamTitle}
-                                  onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, streamTitle: e.target.value } }))}
-                                  placeholder="Enter the broadcast title..."
-                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none focus:border-nexus-accent/30"
-                                />
+                            <div className="space-y-4 p-4 bg-black/20 rounded-xl border border-white/5 relative overflow-hidden group">
+                              <div className="absolute top-0 right-0 p-4 flex gap-2">
+                                {(platformPresets.youtube || []).length > 0 && (
+                                  <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
+                                    {(platformPresets.youtube || []).map(p => (
+                                      <div key={p.name} className="relative group/chip">
+                                        <button
+                                          onClick={() => loadPlatformPreset("youtube", p.config)}
+                                          className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-red-500/50 hover:bg-red-500/10 transition-all text-nexus-text-dim hover:text-white"
+                                          title={`Load ${p.name}`}
+                                        >
+                                          {p.name}
+                                        </button>
+                                        <button 
+                                          onClick={() => deletePlatformPreset("youtube", p.name)}
+                                          className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 text-white rounded-full opacity-0 group-hover/chip:opacity-100 transition-opacity flex items-center justify-center"
+                                        >
+                                          <X className="w-2 h-2" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <button 
+                                  onClick={() => {
+                                    if (platformPresetNaming === "youtube") {
+                                      savePlatformPreset("youtube", tempPlatformPresetName);
+                                      setPlatformPresetNaming(null);
+                                      setTempPlatformPresetName("");
+                                    } else {
+                                      setPlatformPresetNaming("youtube");
+                                    }
+                                  }}
+                                  className="text-[9px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
+                                >
+                                  {platformPresetNaming === "youtube" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+                                  {platformPresetNaming === "youtube" ? "CONFIRM" : "SAVE PRESET"}
+                                </button>
+                                <button 
+                                  onClick={() => syncStreamFields("youtube")}
+                                  className="text-[9px] font-bold text-red-400 hover:text-white transition-colors flex items-center gap-1"
+                                  title="Sync from Post Title"
+                                >
+                                  <Zap className="w-3 h-3" />
+                                  SYNC
+                                </button>
                               </div>
-                              <div>
-                                <label className="text-[10px] text-nexus-text-dim uppercase mb-2 block font-mono">Stream Description</label>
-                                <textarea 
-                                  value={platformConfigs.youtube.description}
-                                  onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, description: e.target.value } }))}
-                                  placeholder="Enter the stream description..."
-                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none h-20 resize-none focus:border-nexus-accent/30"
-                                />
+
+                              {platformPresetNaming === "youtube" && (
+                                <div className="absolute inset-x-0 top-0 bg-red-600/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
+                                  <input 
+                                    type="text"
+                                    autoFocus
+                                    value={tempPlatformPresetName}
+                                    onChange={(e) => setTempPlatformPresetName(e.target.value)}
+                                    placeholder="Preset Name (e.g., Gaming Live)"
+                                    className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
+                                  />
+                                  <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2 pb-2 border-b border-white/5 mb-2">
+                                <Settings2 className="w-3 h-3 text-red-400" />
+                                <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Advanced Stream Settings</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="col-span-2">
-                                  <label className="text-[10px] text-nexus-text-dim uppercase mb-2 block font-mono">Scheduled Start Time</label>
-                                  <div className="grid grid-cols-2 gap-2">
+
+                              <div className="space-y-4">
+                                <div>
+                                  <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                    <Type className="w-2.5 h-2.5" />
+                                    Stream Title
+                                  </label>
+                                  <input 
+                                    type="text"
+                                    value={platformConfigs.youtube.streamTitle}
+                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, streamTitle: e.target.value } }))}
+                                    placeholder="Enter the broadcast title..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-red-500/30 transition-all"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                    <AlignLeft className="w-2.5 h-2.5" />
+                                    Stream Description
+                                  </label>
+                                  <textarea 
+                                    value={platformConfigs.youtube.description}
+                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, description: e.target.value } }))}
+                                    placeholder="Enter the stream description..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none h-20 resize-none focus:border-red-500/30 transition-all"
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                      <Calendar className="w-2.5 h-2.5" />
+                                      Start Date
+                                    </label>
                                     <input 
                                       type="date"
                                       value={platformConfigs.youtube.streamDate}
                                       onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, streamDate: e.target.value } }))}
-                                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none focus:border-nexus-accent/30 [color-scheme:dark]"
+                                      className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-red-500/30 [color-scheme:dark]"
                                     />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                      <Clock className="w-2.5 h-2.5" />
+                                      Start Time
+                                    </label>
                                     <input 
                                       type="time"
                                       value={platformConfigs.youtube.streamTime}
                                       onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, streamTime: e.target.value } }))}
-                                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none focus:border-nexus-accent/30 [color-scheme:dark]"
+                                      className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-red-500/30 [color-scheme:dark]"
                                     />
                                   </div>
                                 </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4 pt-2">
-                                <div className="space-y-1">
-                                  <span className="text-[10px] text-nexus-text-dim uppercase">Visibility</span>
-                                  <select 
-                                    value={platformConfigs.youtube.visibility}
-                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, visibility: e.target.value } }))}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none"
-                                  >
-                                    <option value="public">Public</option>
-                                    <option value="unlisted">Unlisted</option>
-                                    <option value="private">Private</option>
-                                  </select>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-[10px] text-nexus-text-dim uppercase">Category</span>
-                                  <select 
-                                    value={platformConfigs.youtube.category}
-                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, category: e.target.value } }))}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none"
-                                  >
-                                    <option value="Entertainment">Entertainment</option>
-                                    <option value="Education">Education</option>
-                                    <option value="Tech">Tech</option>
-                                    <option value="Gaming">Gaming</option>
-                                  </select>
+
+                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                  <div className="space-y-1.5">
+                                    <label className="text-[9px] text-nexus-text-dim uppercase flex items-center gap-1.5 font-mono">
+                                      <Eye className="w-2.5 h-2.5" />
+                                      Visibility
+                                    </label>
+                                    <select 
+                                      value={platformConfigs.youtube.visibility}
+                                      onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, visibility: e.target.value } }))}
+                                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-2 text-[10px] outline-none hover:border-red-500/30 transition-all cursor-pointer"
+                                    >
+                                      <option value="public">🌍 Public</option>
+                                      <option value="unlisted">🔗 Unlisted</option>
+                                      <option value="private">🔒 Private</option>
+                                    </select>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <label className="text-[9px] text-nexus-text-dim uppercase flex items-center gap-1.5 font-mono">
+                                      <Monitor className="w-2.5 h-2.5" />
+                                      Category
+                                    </label>
+                                    <select 
+                                      value={platformConfigs.youtube.category}
+                                      onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, category: e.target.value } }))}
+                                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-2 text-[10px] outline-none hover:border-red-500/30 transition-all cursor-pointer"
+                                    >
+                                      <option value="Entertainment">🎬 Entertainment</option>
+                                      <option value="Education">🎓 Education</option>
+                                      <option value="Tech">💻 Tech</option>
+                                      <option value="Gaming">🎮 Gaming</option>
+                                    </select>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1537,6 +1839,10 @@ export const SocialControl = () => {
                         <div className="p-4 rounded-2xl bg-blue-600/5 border border-blue-600/10 space-y-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-blue-600">
+                              <div className={cn(
+                                "w-2 h-2 rounded-full",
+                                platformConfigs.linkedin.isLive ? "bg-blue-600 animate-pulse shadow-[0_0_8px_rgba(37,99,235,0.8)]" : "bg-blue-600/20"
+                              )} />
                               <Linkedin className="w-4 h-4" />
                               <span className="text-xs font-bold uppercase tracking-wider">LinkedIn Settings</span>
                             </div>
@@ -1544,7 +1850,7 @@ export const SocialControl = () => {
                               onClick={() => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, isLive: !prev.linkedin.isLive } }))}
                               className={cn(
                                 "px-3 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-2",
-                                platformConfigs.linkedin.isLive ? "bg-blue-600 text-white border-blue-600" : "bg-white/5 border-white/5 text-nexus-text-dim hover:border-blue-600/30"
+                                platformConfigs.linkedin.isLive ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-600/20" : "bg-white/5 border-white/5 text-nexus-text-dim hover:border-blue-600/30"
                               )}
                             >
                               <Play className="w-3 h-3" />
@@ -1553,56 +1859,145 @@ export const SocialControl = () => {
                           </div>
                           
                           {platformConfigs.linkedin.isLive && (
-                            <div className="space-y-4 p-4 bg-black/20 rounded-xl border border-white/5">
-                              <div>
-                                <label className="text-[10px] text-nexus-text-dim uppercase mb-2 block font-mono">Stream Title</label>
-                                <input 
-                                  type="text"
-                                  value={platformConfigs.linkedin.streamTitle}
-                                  onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, streamTitle: e.target.value } }))}
-                                  placeholder="Broadcast title (optional, defaults to post title)..."
-                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none focus:border-nexus-accent/30"
-                                />
+                            <div className="space-y-4 p-4 bg-black/20 rounded-xl border border-white/5 relative overflow-hidden group">
+                              <div className="absolute top-0 right-0 p-4 flex gap-2">
+                                {(platformPresets.linkedin || []).length > 0 && (
+                                  <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
+                                    {(platformPresets.linkedin || []).map(p => (
+                                      <div key={p.name} className="relative group/chip">
+                                        <button
+                                          onClick={() => loadPlatformPreset("linkedin", p.config)}
+                                          className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all text-nexus-text-dim hover:text-white"
+                                          title={`Load ${p.name}`}
+                                        >
+                                          {p.name}
+                                        </button>
+                                        <button 
+                                          onClick={() => deletePlatformPreset("linkedin", p.name)}
+                                          className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 text-white rounded-full opacity-0 group-hover/chip:opacity-100 transition-opacity flex items-center justify-center"
+                                        >
+                                          <X className="w-2 h-2" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <button 
+                                  onClick={() => {
+                                    if (platformPresetNaming === "linkedin") {
+                                      savePlatformPreset("linkedin", tempPlatformPresetName);
+                                      setPlatformPresetNaming(null);
+                                      setTempPlatformPresetName("");
+                                    } else {
+                                      setPlatformPresetNaming("linkedin");
+                                    }
+                                  }}
+                                  className="text-[9px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
+                                >
+                                  {platformPresetNaming === "linkedin" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+                                  {platformPresetNaming === "linkedin" ? "CONFIRM" : "SAVE PRESET"}
+                                </button>
+                                <button 
+                                  onClick={() => syncStreamFields("linkedin")}
+                                  className="text-[9px] font-bold text-blue-400 hover:text-white transition-colors flex items-center gap-1"
+                                  title="Sync from Post Title"
+                                >
+                                  <Zap className="w-3 h-3" />
+                                  SYNC
+                                </button>
                               </div>
-                              <div>
-                                <label className="text-[10px] text-nexus-text-dim uppercase mb-2 block font-mono">Stream Description</label>
-                                <textarea 
-                                  value={platformConfigs.linkedin.description}
-                                  onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, description: e.target.value } }))}
-                                  placeholder="Broadcast details..."
-                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none h-20 resize-none focus:border-nexus-accent/30"
-                                />
+
+                              {platformPresetNaming === "linkedin" && (
+                                <div className="absolute inset-x-0 top-0 bg-blue-600/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
+                                  <input 
+                                    type="text"
+                                    autoFocus
+                                    value={tempPlatformPresetName}
+                                    onChange={(e) => setTempPlatformPresetName(e.target.value)}
+                                    placeholder="Preset Name (e.g., Live Conf)"
+                                    className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
+                                  />
+                                  <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2 pb-2 border-b border-white/5 mb-2">
+                                <Settings2 className="w-3 h-3 text-blue-400" />
+                                <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Advanced Event Settings</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="col-span-2">
-                                  <label className="text-[10px] text-nexus-text-dim uppercase mb-2 block font-mono">Scheduled Start Time</label>
-                                  <div className="grid grid-cols-2 gap-2">
+                              
+                              <div className="space-y-4">
+                                <div>
+                                  <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                    <Type className="w-2.5 h-2.5" />
+                                    Event Title
+                                  </label>
+                                  <input 
+                                    type="text"
+                                    value={platformConfigs.linkedin.streamTitle}
+                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, streamTitle: e.target.value } }))}
+                                    placeholder="Enter official event title..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-blue-600/30 transition-all"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                    <AlignLeft className="w-2.5 h-2.5" />
+                                    Event Description
+                                  </label>
+                                  <textarea 
+                                    value={platformConfigs.linkedin.description}
+                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, description: e.target.value } }))}
+                                    placeholder="Professional event details..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none h-20 resize-none focus:border-blue-600/30 transition-all"
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                      <Calendar className="w-2.5 h-2.5" />
+                                      Start Date
+                                    </label>
                                     <input 
                                       type="date"
                                       value={platformConfigs.linkedin.streamDate}
                                       onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, streamDate: e.target.value } }))}
-                                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none focus:border-nexus-accent/30 [color-scheme:dark]"
+                                      className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-blue-600/30 [color-scheme:dark]"
                                     />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                      <Clock className="w-2.5 h-2.5" />
+                                      Start Time
+                                    </label>
                                     <input 
                                       type="time"
                                       value={platformConfigs.linkedin.streamTime}
                                       onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, streamTime: e.target.value } }))}
-                                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs outline-none focus:border-nexus-accent/30 [color-scheme:dark]"
+                                      className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-blue-600/30 [color-scheme:dark]"
                                     />
                                   </div>
                                 </div>
-                              </div>
-                              <div className="pt-2">
-                                <label className="text-[10px] text-nexus-text-dim uppercase mb-2 block font-mono">Visibility Setting</label>
-                                <select 
-                                  value={platformConfigs.linkedin.visibility}
-                                  onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, visibility: e.target.value } }))}
-                                  className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-[10px] outline-none"
-                                >
-                                  <option value="Anyone">Public</option>
-                                  <option value="Connections">Connections Only</option>
-                                  <option value="Private">Private</option>
-                                </select>
+
+                                <div className="pt-1">
+                                  <label className="text-[9px] text-nexus-text-dim uppercase mb-1.5 flex items-center gap-1.5 font-mono">
+                                    <Eye className="w-2.5 h-2.5" />
+                                    Visibility Setting
+                                  </label>
+                                  <select 
+                                    value={platformConfigs.linkedin.visibility}
+                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, visibility: e.target.value } }))}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-2 text-[10px] outline-none hover:border-blue-600/30 transition-all cursor-pointer"
+                                  >
+                                    <option value="Public">🌍 Public</option>
+                                    <option value="Connections Only">👥 Connections Only</option>
+                                    <option value="Private">🔒 Private</option>
+                                  </select>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1610,11 +2005,59 @@ export const SocialControl = () => {
                       )}
 
                       {selectedPlatforms.includes("facebook") && (
-                        <div className="p-4 rounded-2xl bg-blue-600/5 border border-blue-600/10 space-y-3">
-                          <div className="flex items-center gap-2 text-blue-600">
-                            <Settings2 className="w-4 h-4" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Facebook Settings</span>
+                        <div className="p-4 rounded-2xl bg-blue-600/5 border border-blue-600/10 space-y-3 relative overflow-hidden group">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-blue-600">
+                              <Settings2 className="w-4 h-4" />
+                              <span className="text-xs font-bold uppercase tracking-wider">Facebook Settings</span>
+                            </div>
+                            <div className="flex gap-2">
+                              {(platformPresets.facebook || []).length > 0 && (
+                                <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
+                                  {(platformPresets.facebook || []).map(p => (
+                                    <button
+                                      key={p.name}
+                                      onClick={() => loadPlatformPreset("facebook", p.config)}
+                                      className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-blue-600/50 hover:bg-blue-600/10 transition-all text-nexus-text-dim hover:text-white"
+                                      title={`Load ${p.name}`}
+                                    >
+                                      {p.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <button 
+                                onClick={() => {
+                                  if (platformPresetNaming === "facebook") {
+                                    savePlatformPreset("facebook", tempPlatformPresetName);
+                                    setPlatformPresetNaming(null);
+                                    setTempPlatformPresetName("");
+                                  } else {
+                                    setPlatformPresetNaming("facebook");
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
+                              >
+                                {platformPresetNaming === "facebook" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+                              </button>
+                            </div>
                           </div>
+
+                          {platformPresetNaming === "facebook" && (
+                            <div className="absolute inset-x-0 top-0 bg-blue-600/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
+                              <input 
+                                type="text"
+                                autoFocus
+                                value={tempPlatformPresetName}
+                                onChange={(e) => setTempPlatformPresetName(e.target.value)}
+                                placeholder="Preset Name"
+                                className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
+                              />
+                              <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] text-nexus-text-dim uppercase">Audience Scope</span>
                             <select 
