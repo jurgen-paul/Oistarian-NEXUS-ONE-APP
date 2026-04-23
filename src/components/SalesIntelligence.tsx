@@ -17,7 +17,11 @@ import {
   TrendingUp,
   Zap,
   X,
-  Target
+  Target,
+  Mail,
+  Workflow,
+  ShieldCheck,
+  Award
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
@@ -32,6 +36,9 @@ interface CallbackRequest {
   source: string;
   notes: string;
   createdAt: string;
+  leadScore: number; // 0-100
+  followUpStatus: "Idle" | "Enrolled" | "Completed" | "Paused";
+  lastContacted?: string;
 }
 
 const INITIAL_CALLBACKS: CallbackRequest[] = [
@@ -44,7 +51,9 @@ const INITIAL_CALLBACKS: CallbackRequest[] = [
     priority: "High",
     source: "Landing Page",
     notes: "Interested in Enterprise licensing.",
-    createdAt: "2026-04-22T08:00:00Z"
+    createdAt: "2026-04-22T08:00:00Z",
+    leadScore: 85,
+    followUpStatus: "Idle"
   },
   {
     id: "CB-002",
@@ -55,7 +64,9 @@ const INITIAL_CALLBACKS: CallbackRequest[] = [
     priority: "Medium",
     source: "Pricing Page",
     notes: "Question about API limits.",
-    createdAt: "2026-04-22T09:15:00Z"
+    createdAt: "2026-04-22T09:15:00Z",
+    leadScore: 62,
+    followUpStatus: "Enrolled"
   },
   {
     id: "CB-003",
@@ -66,7 +77,9 @@ const INITIAL_CALLBACKS: CallbackRequest[] = [
     priority: "Low",
     source: "Support Bot",
     notes: "Resolution confirmed. System architect follow-up.",
-    createdAt: "2026-04-22T07:30:00Z"
+    createdAt: "2026-04-22T07:30:00Z",
+    leadScore: 92,
+    followUpStatus: "Completed"
   },
   {
     id: "CB-004",
@@ -77,7 +90,9 @@ const INITIAL_CALLBACKS: CallbackRequest[] = [
     priority: "High",
     source: "Mobile App",
     notes: "Requires urgent technical consultation regarding cross-border payments.",
-    createdAt: "2026-04-21T18:00:00Z"
+    createdAt: "2026-04-21T18:00:00Z",
+    leadScore: 45,
+    followUpStatus: "Idle"
   }
 ];
 
@@ -127,7 +142,9 @@ export const SalesIntelligence = () => {
       priority: newCallback.priority || "Medium",
       source: "NEURAL HUB",
       notes: newCallback.notes || "",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      leadScore: Math.floor(Math.random() * 40) + 60, // Default higher for new leads
+      followUpStatus: "Idle"
     };
     setCallbacks([callback, ...callbacks]);
     setIsAddingCallback(false);
@@ -167,8 +184,8 @@ export const SalesIntelligence = () => {
           {[
             { label: "Total Requests", value: callbacks.length, icon: PhoneCall, color: "text-blue-400" },
             { label: "High Priority", value: callbacks.filter(c => c.priority === "High").length, icon: AlertCircle, color: "text-red-400" },
-            { label: "Avg Response", value: "8.4m", icon: Clock, color: "text-nexus-accent" },
-            { label: "Conversion", value: "24%", icon: TrendingUp, color: "text-purple-400" },
+            { label: "Avg Lead Score", value: Math.round(callbacks.reduce((a, b) => a + b.leadScore, 0) / callbacks.length), icon: Award, color: "text-nexus-accent" },
+            { label: "Enrolled in Sequences", value: callbacks.filter(c => c.followUpStatus === "Enrolled").length, icon: Workflow, color: "text-purple-400" },
           ].map((stat, i) => (
             <div key={i} className="glass p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -206,29 +223,38 @@ export const SalesIntelligence = () => {
         </div>
       </div>
 
-      <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/5 w-fit">
-        {["All", "Pending", "In-Progress", "Completed"].map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={cn(
-              "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-              filter === s ? "bg-nexus-accent text-black shadow-lg shadow-nexus-accent/20" : "text-nexus-text-dim hover:text-white"
-            )}
-          >
-            {s.toUpperCase()}
-          </button>
-        ))}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/5 w-fit">
+          {["All", "Pending", "In-Progress", "Completed"].map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
+                filter === s ? "bg-nexus-accent text-black shadow-lg shadow-nexus-accent/20" : "text-nexus-text-dim hover:text-white"
+              )}
+            >
+              {s.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Workflow className="w-4 h-4 text-purple-400" />
+          <span className="text-xs font-mono text-nexus-text-dim uppercase tracking-widest">Active Flows: 12</span>
+        </div>
       </div>
 
-      <div className="glass rounded-3xl overflow-hidden border border-white/5">
-        <table className="w-full text-left border-collapse">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="lg:col-span-3">
+          <div className="glass rounded-3xl overflow-hidden border border-white/5">
+            <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-white/5 bg-white/5">
               <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Lead Entity</th>
+              <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Neural Score</th>
+              <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Sequence</th>
               <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Status</th>
-              <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Optimal Time</th>
-              <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Priority</th>
               <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Actions</th>
             </tr>
           </thead>
@@ -255,6 +281,39 @@ export const SalesIntelligence = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1.5 min-w-[80px]">
+                      <div className="flex justify-between items-center text-[9px] font-mono">
+                        <span className="text-nexus-text-dim">SCORE</span>
+                        <span className={cn(
+                          "font-bold",
+                          cb.leadScore > 80 ? "text-green-400" : cb.leadScore > 50 ? "text-nexus-accent" : "text-yellow-400"
+                        )}>{cb.leadScore}</span>
+                      </div>
+                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${cb.leadScore}%` }}
+                          className={cn(
+                            "h-full rounded-full",
+                            cb.leadScore > 80 ? "bg-green-400" : cb.leadScore > 50 ? "bg-nexus-accent" : "bg-yellow-400"
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                       <Workflow className={cn(
+                         "w-3 h-3",
+                         cb.followUpStatus === "Enrolled" ? "text-purple-400 animate-pulse" : "text-nexus-text-dim"
+                       )} />
+                       <span className={cn(
+                         "text-[10px] font-bold uppercase tracking-wider",
+                         cb.followUpStatus === "Enrolled" ? "text-purple-400" : "text-nexus-text-dim"
+                       )}>{cb.followUpStatus}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
                     <span className={cn(
                       "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
                       cb.status === "Pending" && "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20",
@@ -266,26 +325,23 @@ export const SalesIntelligence = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-nexus-text-dim">
-                      <Clock className="w-3 h-3 text-nexus-accent" />
-                      <span className="text-xs font-mono">{cb.requestedTime}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded border uppercase",
-                      cb.priority === "High" ? "border-red-500/30 text-red-400" : 
-                      cb.priority === "Medium" ? "border-blue-500/30 text-blue-400" : "border-white/10 text-nexus-text-dim"
-                    )}>
-                      {cb.priority}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
+                        onClick={() => {
+                          setCallbacks(prev => prev.map(p => p.id === cb.id ? { ...p, followUpStatus: p.followUpStatus === "Enrolled" ? "Paused" : "Enrolled" } : p))
+                        }}
+                        className={cn(
+                          "p-2 rounded-lg bg-white/5 transition-colors",
+                          cb.followUpStatus === "Enrolled" ? "hover:bg-yellow-500/20 text-yellow-500" : "hover:bg-purple-500/20 text-purple-400"
+                        )}
+                        title={cb.followUpStatus === "Enrolled" ? "Pause Sequence" : "Enroll in Sequence"}
+                      >
+                        <Workflow className="w-4 h-4" />
+                      </button>
+                      <button 
                         onClick={() => updateStatus(cb.id, "In-Progress")}
-                        className="p-2 rounded-lg bg-white/5 hover:bg-blue-500/20 text-blue-400 transition-colors"
-                        title="Commence Call"
+                        className="p-2 rounded-lg bg-white/5 hover:bg-nexus-accent/20 text-nexus-accent transition-colors"
+                        title="Commence Neural Link"
                       >
                         <PhoneOutgoing className="w-4 h-4" />
                       </button>
@@ -295,9 +351,6 @@ export const SalesIntelligence = () => {
                         title="Mark Resolved"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                      </button>
-                      <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-nexus-text-dim transition-colors">
-                        <MoreVertical className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -313,8 +366,74 @@ export const SalesIntelligence = () => {
           </div>
         )}
       </div>
+    </div>
 
-      {/* New Request Modal */}
+    <div className="lg:col-span-1 space-y-6">
+        <div className="glass p-6 rounded-3xl border border-white/5 bg-gradient-to-br from-purple-500/5 to-transparent">
+          <div className="flex items-center gap-2 mb-6">
+            <Workflow className="w-5 h-5 text-purple-400" />
+            <h4 className="text-sm font-bold tracking-tight">AUTO-FLOWS</h4>
+          </div>
+          
+          <div className="space-y-4">
+            {[
+              { name: "Enterprise Warm-up", steps: 5, active: 12, hue: "purple" },
+              { name: "Dormant Recovery", steps: 3, active: 4, hue: "blue" },
+              { name: "Post-Demo Sequence", steps: 4, active: 28, hue: "nexus-accent" },
+            ].map((flow, i) => (
+              <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all group cursor-pointer">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs font-bold text-white group-hover:text-nexus-accent transition-colors">{flow.name}</p>
+                  <div className="flex -space-x-2">
+                    {[1,2,3].map(id => (
+                      <div key={id} className="w-5 h-5 rounded-full border border-black bg-nexus-accent/20 flex items-center justify-center text-[8px] font-bold">L</div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-nexus-text-dim font-mono">
+                  <span className="flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-yellow-500" /> {flow.steps} STEPS
+                  </span>
+                  <span className="flex items-center gap-1 text-white">
+                     {flow.active} ACTIVE
+                  </span>
+                </div>
+              </div>
+            ))}
+            
+            <button className="w-full py-3 border border-dashed border-white/10 rounded-2xl text-[10px] font-mono text-nexus-text-dim hover:border-nexus-accent/50 hover:text-white transition-all flex items-center justify-center gap-2">
+              <Plus className="w-3 h-3" />
+              CREATE CUSTOM FLOW
+            </button>
+          </div>
+        </div>
+
+        <div className="glass p-6 rounded-3xl border border-white/5">
+          <div className="flex items-center gap-2 mb-6">
+            <ShieldCheck className="w-5 h-5 text-nexus-accent" />
+            <h4 className="text-sm font-bold tracking-tight">SCORING LOGIC</h4>
+          </div>
+          <div className="space-y-4">
+            {[
+              { label: "Phone Verified", weight: "+15", active: true },
+              { label: "Corporate Email", weight: "+10", active: true },
+              { label: "Pricing Page View", weight: "+25", active: true },
+              { label: "Wait Time > 24h", weight: "-10", active: false },
+            ].map((rule, i) => (
+              <div key={i} className="flex justify-between items-center text-[10px] font-mono">
+                <span className={rule.active ? "text-nexus-text-dim" : "text-nexus-text-dim/40"}>{rule.label}</span>
+                <span className={cn(
+                  "font-bold",
+                  rule.weight.startsWith("+") ? "text-green-400" : "text-red-400"
+                )}>{rule.weight}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* New Request Modal */}
       <AnimatePresence>
         {isAddingCallback && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

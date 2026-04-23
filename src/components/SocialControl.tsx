@@ -177,6 +177,85 @@ export const SocialControl = () => {
   const [platformPresetNaming, setPlatformPresetNaming] = useState<string | null>(null);
   const [tempPlatformPresetName, setTempPlatformPresetName] = useState("");
 
+  const PlatformPresetManager = ({ platform, color }: { platform: string; color: string }) => {
+    const platformPresetsList = platformPresets[platform] || [];
+    const isNaming = platformPresetNaming === platform;
+
+    return (
+      <div className="flex flex-col gap-2 mb-4">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-nexus-text-dim uppercase font-mono tracking-widest">Neural Presets</span>
+          <button 
+            onClick={() => {
+              if (isNaming) {
+                savePlatformPreset(platform, tempPlatformPresetName);
+                setPlatformPresetNaming(null);
+                setTempPlatformPresetName("");
+              } else {
+                setPlatformPresetNaming(platform);
+              }
+            }}
+            className={cn(
+              "text-[10px] font-bold transition-all flex items-center gap-1.5 px-2 py-1 rounded-lg border",
+              isNaming ? "bg-nexus-accent text-black border-nexus-accent" : "text-nexus-accent border-nexus-accent/20 hover:bg-nexus-accent/10"
+            )}
+          >
+            {isNaming ? <CheckCircle2 className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+            {isNaming ? "CONFIRM" : "SAVE NEW"}
+          </button>
+        </div>
+
+        {isNaming && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex gap-2"
+          >
+            <input 
+              type="text"
+              autoFocus
+              value={tempPlatformPresetName}
+              onChange={(e) => setTempPlatformPresetName(e.target.value)}
+              placeholder="Preset Name..."
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-nexus-accent/50"
+            />
+            <button 
+              onClick={() => setPlatformPresetNaming(null)}
+              className="px-2 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 transition-all"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+
+        {platformPresetsList.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {platformPresetsList.map(p => (
+              <div key={p.name} className="group relative">
+                <button
+                  onClick={() => loadPlatformPreset(platform, p.config)}
+                  className={cn(
+                    "text-[9px] px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5",
+                    "bg-white/5 border-white/5 hover:border-nexus-accent/50 hover:bg-nexus-accent/10 text-nexus-text-dim hover:text-white"
+                  )}
+                >
+                  <Bookmark className="w-2.5 h-2.5" />
+                  {p.name}
+                </button>
+                <button 
+                  onClick={() => deletePlatformPreset(platform, p.name)}
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                >
+                  <X className="w-2 h-2" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const [generatorPrompt, setGeneratorPrompt] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showSummaryInput, setShowSummaryInput] = useState(false);
@@ -1511,59 +1590,14 @@ export const SocialControl = () => {
                     <div className="space-y-3">
                       {selectedPlatforms.includes("twitter") && (
                         <div className="p-4 rounded-2xl bg-blue-400/5 border border-blue-400/10 space-y-3 relative overflow-hidden group">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-blue-400">
-                              <Twitter className="w-4 h-4" />
-                              <span className="text-xs font-bold uppercase tracking-wider">Twitter / X Settings</span>
-                            </div>
-                            <div className="flex gap-2">
-                              {(platformPresets.twitter || []).length > 0 && (
-                                <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
-                                  {(platformPresets.twitter || []).map(p => (
-                                    <button
-                                      key={p.name}
-                                      onClick={() => loadPlatformPreset("twitter", p.config)}
-                                      className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all text-nexus-text-dim hover:text-white"
-                                      title={`Load ${p.name}`}
-                                    >
-                                      {p.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              <button 
-                                onClick={() => {
-                                  if (platformPresetNaming === "twitter") {
-                                    savePlatformPreset("twitter", tempPlatformPresetName);
-                                    setPlatformPresetNaming(null);
-                                    setTempPlatformPresetName("");
-                                  } else {
-                                    setPlatformPresetNaming("twitter");
-                                  }
-                                }}
-                                className="text-[10px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
-                              >
-                                {platformPresetNaming === "twitter" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-                              </button>
-                            </div>
+                          <div className="flex items-center gap-2 text-blue-400 mb-2">
+                            <Twitter className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Twitter / X Protocol</span>
                           </div>
 
-                          {platformPresetNaming === "twitter" && (
-                            <div className="absolute inset-x-0 top-0 bg-blue-400/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
-                              <input 
-                                type="text"
-                                autoFocus
-                                value={tempPlatformPresetName}
-                                onChange={(e) => setTempPlatformPresetName(e.target.value)}
-                                placeholder="Preset Name"
-                                className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
-                              />
-                              <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
+                          <PlatformPresetManager platform="twitter" color="blue-400" />
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/5">
                             <span className="text-[10px] text-nexus-text-dim uppercase">Character Limit</span>
                             <select 
                               value={platformConfigs.twitter.charLimit}
@@ -1579,59 +1613,14 @@ export const SocialControl = () => {
 
                       {selectedPlatforms.includes("instagram") && (
                         <div className="p-4 rounded-2xl bg-pink-500/5 border border-pink-500/10 space-y-3 relative overflow-hidden group">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-pink-500">
-                              <Instagram className="w-4 h-4" />
-                              <span className="text-xs font-bold uppercase tracking-wider">Instagram Settings</span>
-                            </div>
-                            <div className="flex gap-2">
-                              {(platformPresets.instagram || []).length > 0 && (
-                                <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
-                                  {(platformPresets.instagram || []).map(p => (
-                                    <button
-                                      key={p.name}
-                                      onClick={() => loadPlatformPreset("instagram", p.config)}
-                                      className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-pink-500/50 hover:bg-pink-500/10 transition-all text-nexus-text-dim hover:text-white"
-                                      title={`Load ${p.name}`}
-                                    >
-                                      {p.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              <button 
-                                onClick={() => {
-                                  if (platformPresetNaming === "instagram") {
-                                    savePlatformPreset("instagram", tempPlatformPresetName);
-                                    setPlatformPresetNaming(null);
-                                    setTempPlatformPresetName("");
-                                  } else {
-                                    setPlatformPresetNaming("instagram");
-                                  }
-                                }}
-                                className="text-[10px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
-                              >
-                                {platformPresetNaming === "instagram" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-                              </button>
-                            </div>
+                          <div className="flex items-center gap-2 text-pink-500 mb-2">
+                            <Instagram className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Instagram Protocol</span>
                           </div>
 
-                          {platformPresetNaming === "instagram" && (
-                            <div className="absolute inset-x-0 top-0 bg-pink-500/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
-                              <input 
-                                type="text"
-                                autoFocus
-                                value={tempPlatformPresetName}
-                                onChange={(e) => setTempPlatformPresetName(e.target.value)}
-                                placeholder="Preset Name"
-                                className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
-                              />
-                              <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
+                          <PlatformPresetManager platform="instagram" color="pink-500" />
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/5">
                             <span className="text-[10px] text-nexus-text-dim uppercase">Image Ratio</span>
                             <div className="flex gap-2">
                               {["1:1", "4:5", "16:9"].map(ratio => (
@@ -1678,43 +1667,7 @@ export const SocialControl = () => {
                           
                           {platformConfigs.youtube.isLive && (
                             <div className="space-y-4 p-4 bg-black/20 rounded-xl border border-white/5 relative overflow-hidden group">
-                              <div className="absolute top-0 right-0 p-4 flex gap-2">
-                                {(platformPresets.youtube || []).length > 0 && (
-                                  <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
-                                    {(platformPresets.youtube || []).map(p => (
-                                      <div key={p.name} className="relative group/chip">
-                                        <button
-                                          onClick={() => loadPlatformPreset("youtube", p.config)}
-                                          className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-red-500/50 hover:bg-red-500/10 transition-all text-nexus-text-dim hover:text-white"
-                                          title={`Load ${p.name}`}
-                                        >
-                                          {p.name}
-                                        </button>
-                                        <button 
-                                          onClick={() => deletePlatformPreset("youtube", p.name)}
-                                          className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 text-white rounded-full opacity-0 group-hover/chip:opacity-100 transition-opacity flex items-center justify-center"
-                                        >
-                                          <X className="w-2 h-2" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <button 
-                                  onClick={() => {
-                                    if (platformPresetNaming === "youtube") {
-                                      savePlatformPreset("youtube", tempPlatformPresetName);
-                                      setPlatformPresetNaming(null);
-                                      setTempPlatformPresetName("");
-                                    } else {
-                                      setPlatformPresetNaming("youtube");
-                                    }
-                                  }}
-                                  className="text-[9px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
-                                >
-                                  {platformPresetNaming === "youtube" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-                                  {platformPresetNaming === "youtube" ? "CONFIRM" : "SAVE PRESET"}
-                                </button>
+                              <div className="absolute top-0 right-0 p-4">
                                 <button 
                                   onClick={() => syncStreamFields("youtube")}
                                   className="text-[9px] font-bold text-red-400 hover:text-white transition-colors flex items-center gap-1"
@@ -1725,21 +1678,7 @@ export const SocialControl = () => {
                                 </button>
                               </div>
 
-                              {platformPresetNaming === "youtube" && (
-                                <div className="absolute inset-x-0 top-0 bg-red-600/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
-                                  <input 
-                                    type="text"
-                                    autoFocus
-                                    value={tempPlatformPresetName}
-                                    onChange={(e) => setTempPlatformPresetName(e.target.value)}
-                                    placeholder="Preset Name (e.g., Gaming Live)"
-                                    className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
-                                  />
-                                  <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
+                              <PlatformPresetManager platform="youtube" color="red-500" />
 
                               <div className="flex items-center gap-2 pb-2 border-b border-white/5 mb-2">
                                 <Settings2 className="w-3 h-3 text-red-400" />
@@ -1865,43 +1804,7 @@ export const SocialControl = () => {
                           
                           {platformConfigs.linkedin.isLive && (
                             <div className="space-y-4 p-4 bg-black/20 rounded-xl border border-white/5 relative overflow-hidden group">
-                              <div className="absolute top-0 right-0 p-4 flex gap-2">
-                                {(platformPresets.linkedin || []).length > 0 && (
-                                  <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
-                                    {(platformPresets.linkedin || []).map(p => (
-                                      <div key={p.name} className="relative group/chip">
-                                        <button
-                                          onClick={() => loadPlatformPreset("linkedin", p.config)}
-                                          className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all text-nexus-text-dim hover:text-white"
-                                          title={`Load ${p.name}`}
-                                        >
-                                          {p.name}
-                                        </button>
-                                        <button 
-                                          onClick={() => deletePlatformPreset("linkedin", p.name)}
-                                          className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 text-white rounded-full opacity-0 group-hover/chip:opacity-100 transition-opacity flex items-center justify-center"
-                                        >
-                                          <X className="w-2 h-2" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <button 
-                                  onClick={() => {
-                                    if (platformPresetNaming === "linkedin") {
-                                      savePlatformPreset("linkedin", tempPlatformPresetName);
-                                      setPlatformPresetNaming(null);
-                                      setTempPlatformPresetName("");
-                                    } else {
-                                      setPlatformPresetNaming("linkedin");
-                                    }
-                                  }}
-                                  className="text-[9px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
-                                >
-                                  {platformPresetNaming === "linkedin" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-                                  {platformPresetNaming === "linkedin" ? "CONFIRM" : "SAVE PRESET"}
-                                </button>
+                              <div className="absolute top-0 right-0 p-4">
                                 <button 
                                   onClick={() => syncStreamFields("linkedin")}
                                   className="text-[9px] font-bold text-blue-400 hover:text-white transition-colors flex items-center gap-1"
@@ -1912,21 +1815,7 @@ export const SocialControl = () => {
                                 </button>
                               </div>
 
-                              {platformPresetNaming === "linkedin" && (
-                                <div className="absolute inset-x-0 top-0 bg-blue-600/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
-                                  <input 
-                                    type="text"
-                                    autoFocus
-                                    value={tempPlatformPresetName}
-                                    onChange={(e) => setTempPlatformPresetName(e.target.value)}
-                                    placeholder="Preset Name (e.g., Live Conf)"
-                                    className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
-                                  />
-                                  <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
+                              <PlatformPresetManager platform="linkedin" color="blue-600" />
 
                               <div className="flex items-center gap-2 pb-2 border-b border-white/5 mb-2">
                                 <Settings2 className="w-3 h-3 text-blue-400" />
@@ -2011,59 +1900,14 @@ export const SocialControl = () => {
 
                       {selectedPlatforms.includes("facebook") && (
                         <div className="p-4 rounded-2xl bg-blue-600/5 border border-blue-600/10 space-y-3 relative overflow-hidden group">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-blue-600">
-                              <Settings2 className="w-4 h-4" />
-                              <span className="text-xs font-bold uppercase tracking-wider">Facebook Settings</span>
-                            </div>
-                            <div className="flex gap-2">
-                              {(platformPresets.facebook || []).length > 0 && (
-                                <div className="flex gap-1 items-center mr-2 pr-2 border-r border-white/10">
-                                  {(platformPresets.facebook || []).map(p => (
-                                    <button
-                                      key={p.name}
-                                      onClick={() => loadPlatformPreset("facebook", p.config)}
-                                      className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 hover:border-blue-600/50 hover:bg-blue-600/10 transition-all text-nexus-text-dim hover:text-white"
-                                      title={`Load ${p.name}`}
-                                    >
-                                      {p.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              <button 
-                                onClick={() => {
-                                  if (platformPresetNaming === "facebook") {
-                                    savePlatformPreset("facebook", tempPlatformPresetName);
-                                    setPlatformPresetNaming(null);
-                                    setTempPlatformPresetName("");
-                                  } else {
-                                    setPlatformPresetNaming("facebook");
-                                  }
-                                }}
-                                className="text-[10px] font-bold text-nexus-accent hover:text-white transition-colors flex items-center gap-1"
-                              >
-                                {platformPresetNaming === "facebook" ? <CheckCircle2 className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-                              </button>
-                            </div>
+                          <div className="flex items-center gap-2 text-blue-600 mb-2">
+                            <Settings2 className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Facebook Protocol</span>
                           </div>
 
-                          {platformPresetNaming === "facebook" && (
-                            <div className="absolute inset-x-0 top-0 bg-blue-600/90 backdrop-blur-md p-4 z-10 flex items-center gap-2 animate-in slide-in-from-top duration-200">
-                              <input 
-                                type="text"
-                                autoFocus
-                                value={tempPlatformPresetName}
-                                onChange={(e) => setTempPlatformPresetName(e.target.value)}
-                                placeholder="Preset Name"
-                                className="flex-1 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none"
-                              />
-                              <button onClick={() => setPlatformPresetNaming(null)} className="text-white">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
+                          <PlatformPresetManager platform="facebook" color="blue-600" />
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/5">
                             <span className="text-[10px] text-nexus-text-dim uppercase">Audience Scope</span>
                             <select 
                               value={platformConfigs.facebook.audience}
