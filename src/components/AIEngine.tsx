@@ -84,6 +84,60 @@ export const AIEngine = () => {
   const [isCapturingVoice, setIsCapturingVoice] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+
+      recognitionRef.current.onresult = (event: any) => {
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        if (finalTranscript) {
+          setInput(prev => {
+            const separator = (prev.length > 0 && !prev.endsWith(" ")) ? " " : "";
+            return prev + separator + finalTranscript;
+          });
+        }
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech Recognition Error:", event.error);
+        setIsCapturingVoice(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsCapturingVoice(false);
+      };
+    }
+  }, []);
+
+  const toggleVoiceCapture = () => {
+    if (!recognitionRef.current) {
+      alert("Neural voice bypass not supported in this interface port.");
+      return;
+    }
+
+    if (isCapturingVoice) {
+      recognitionRef.current.stop();
+      setIsCapturingVoice(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsCapturingVoice(true);
+      } catch (err) {
+        console.error("Failed to start voice capture:", err);
+      }
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -388,11 +442,12 @@ export const AIEngine = () => {
               </div>
             </div>
             <button 
-              onClick={() => setIsCapturingVoice(!isCapturingVoice)}
+              onClick={toggleVoiceCapture}
               className={cn(
                 "p-2 rounded-xl transition-all",
-                isCapturingVoice ? "bg-red-500/20 text-red-400 animate-pulse" : "hover:bg-white/5 text-nexus-text-dim"
+                isCapturingVoice ? "bg-red-500/20 text-red-400 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.3)]" : "hover:bg-white/5 text-nexus-text-dim"
               )}
+              title="Neural Voice Intake"
             >
               <Mic className="w-4 h-4" />
             </button>
