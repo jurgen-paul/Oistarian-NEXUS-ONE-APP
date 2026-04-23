@@ -95,6 +95,8 @@ const INITIAL_AB_TESTS: ABTest[] = [
   }
 ];
 
+const COLORS = ["#00f2ff", "#7000ff", "#ff00e5", "#ffffff", "#3b82f6", "#ef4444"];
+
 export const MarketingSuite = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -292,6 +294,33 @@ export const MarketingSuite = () => {
                         <DollarSign className="w-4 h-4 text-nexus-accent" />
                         Neural Budget Allocation
                       </h5>
+                      
+                      {campaign?.budget && (
+                        <div className="h-48 w-full glass rounded-2xl p-4 border border-white/5">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={campaign.budget}>
+                              <XAxis 
+                                dataKey="platform" 
+                                stroke="rgba(255,255,255,0.3)" 
+                                fontSize={9} 
+                                tickLine={false} 
+                                axisLine={false} 
+                              />
+                              <Tooltip 
+                                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                contentStyle={{ backgroundColor: "#0f0f14", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }}
+                                itemStyle={{ fontSize: "10px", color: "#00f2ff" }}
+                              />
+                              <Bar dataKey="percentage" radius={[4, 4, 0, 0]} barSize={30}>
+                                {campaign.budget.map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {campaign?.budget.map((item, i) => (
                           <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center">
