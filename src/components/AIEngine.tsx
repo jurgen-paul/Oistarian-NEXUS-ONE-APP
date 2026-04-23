@@ -24,6 +24,7 @@ import {
 import { GoogleGenAI, Modality } from "@google/genai";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/src/lib/utils";
+import { NEXUS_NPU } from "@/src/lib/neuralCompute";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -187,6 +188,9 @@ export const AIEngine = () => {
     setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
+    // Simulate Neural Compute Activation
+    NEXUS_NPU.processRange(0, 100, (val) => val + Math.random());
+
     try {
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
@@ -218,9 +222,12 @@ export const AIEngine = () => {
           </div>
           <div>
             <h2 className="text-xl font-display font-bold">Unified AI Engine</h2>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-3 mt-1">
               <p className="text-[10px] text-nexus-text-dim font-mono uppercase tracking-widest">Protocol V3.2</p>
-              <div className="w-1 h-1 rounded-full bg-nexus-accent animate-ping" />
+              <div className="flex items-center gap-1">
+                <div className="w-1 h-1 rounded-full bg-nexus-accent animate-ping" />
+                <span className="text-[9px] text-nexus-accent font-mono uppercase">NPU: {(NEXUS_NPU.capacity / 1024 / 1024).toFixed(1)}MB</span>
+              </div>
             </div>
           </div>
         </div>

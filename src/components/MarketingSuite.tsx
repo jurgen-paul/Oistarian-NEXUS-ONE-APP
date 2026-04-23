@@ -55,11 +55,53 @@ interface Campaign {
   budget: { platform: string; percentage: number; amount: string }[];
 }
 
+interface ABTest {
+  id: string;
+  name: string;
+  status: "Active" | "Completed" | "Draft";
+  variants: {
+    name: string;
+    creative: string;
+    audience: string;
+    metrics: {
+      reach: number;
+      ctr: number;
+      conversions: number;
+    }
+  }[];
+  startDate: string;
+}
+
+const INITIAL_AB_TESTS: ABTest[] = [
+  {
+    id: "AB-210",
+    name: "Summer Blast Creative Split",
+    status: "Active",
+    startDate: "2026-04-20",
+    variants: [
+      {
+        name: "Variant A (High Energy)",
+        creative: "Fast-paced motion graphics with upbeat audio.",
+        audience: "Urban Athletes (18-24)",
+        metrics: { reach: 12400, ctr: 4.2, conversions: 512 }
+      },
+      {
+        name: "Variant B (Minimalist)",
+        creative: "Clean, static aesthetic with focus on ingredients.",
+        audience: "Urban Athletes (18-24)",
+        metrics: { reach: 11800, ctr: 3.8, conversions: 489 }
+      }
+    ]
+  }
+];
+
 export const MarketingSuite = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [abTests, setAbTests] = useState<ABTest[]>(INITIAL_AB_TESTS);
+  const [activeTab, setActiveTab] = useState<"insights" | "campaigns" | "ab-testing">("insights");
 
   const generateCampaign = async () => {
     if (!prompt.trim() || isGenerating) return;
@@ -128,13 +170,33 @@ export const MarketingSuite = () => {
           <h2 className="text-3xl font-display font-bold">AI Marketing Suite</h2>
           <p className="text-nexus-text-dim mt-1">Predictive analytics and campaign optimization engine.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2 bg-nexus-accent/10 border border-nexus-accent/30 text-nexus-accent rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-nexus-accent hover:text-black transition-all"
-        >
-          <Zap className="w-4 h-4" />
-          GENERATE CAMPAIGN
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="glass p-1 rounded-xl flex gap-1">
+            {[
+              { id: "insights", label: "Insights", icon: BarChart3 },
+              { id: "ab-testing", label: "A/B Matrix", icon: Target },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+                  activeTab === tab.id ? "bg-nexus-accent text-black" : "text-nexus-text-dim hover:text-white"
+                )}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="px-4 py-2 bg-nexus-accent/10 border border-nexus-accent/30 text-nexus-accent rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-nexus-accent hover:text-black transition-all"
+          >
+            <Zap className="w-4 h-4" />
+            GENERATE CAMPAIGN
+          </button>
+        </div>
       </header>
 
       <AnimatePresence>
@@ -276,7 +338,9 @@ export const MarketingSuite = () => {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {activeTab === "insights" ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: "Market Sentiment", value: "Positive", icon: Target, trend: "+8.2%", up: true },
           { label: "Customer LTV", value: "$1,240", icon: Users, trend: "+12.5%", up: true },
@@ -404,6 +468,98 @@ export const MarketingSuite = () => {
           ))}
         </div>
       </div>
+    </>
+  ) : (
+    <div className="space-y-6">
+      <div className="flex justify-between items-end">
+        <div>
+          <h3 className="text-xl font-display font-bold">Neural A/B Matrix</h3>
+          <p className="text-nexus-text-dim text-sm mt-1">Cross-variant testing for creative resonance and audience fit.</p>
+        </div>
+        <button className="px-4 py-2 glass border border-white/10 text-xs font-bold rounded-xl hover:bg-white/5 transition-all flex items-center gap-2">
+          <Zap className="w-3.5 h-3.5" />
+          NEW A/B PROTOCOL
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+        {abTests.map((test) => (
+          <div key={test.id} className="glass p-8 rounded-3xl border border-white/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-6">
+              <span className={cn(
+                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                test.status === "Active" ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-white/5 text-nexus-text-dim"
+              )}>
+                {test.status}
+              </span>
+            </div>
+            
+            <div className="mb-8">
+              <h4 className="text-2xl font-display font-bold">{test.name}</h4>
+              <p className="text-nexus-text-dim text-xs font-mono uppercase mt-2">Started: {test.startDate} • ID: {test.id}</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {test.variants.map((variant, i) => (
+                <div key={i} className="space-y-6">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div>
+                      <h5 className="font-bold text-nexus-accent">{variant.name}</h5>
+                      <p className="text-[10px] text-nexus-text-dim uppercase tracking-widest mt-1">{variant.audience}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-display font-bold text-white">{variant.metrics.conversions}</p>
+                      <p className="text-[9px] text-nexus-text-dim uppercase font-mono">Conversions</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+                      <p className="text-xs text-nexus-text-dim uppercase font-mono">Reach</p>
+                      <p className="text-lg font-bold mt-1">{(variant.metrics.reach / 1000).toFixed(1)}k</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+                      <p className="text-xs text-nexus-text-dim uppercase font-mono">CTR</p>
+                      <p className="text-lg font-bold mt-1 text-green-400">{variant.metrics.ctr}%</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+                      <p className="text-xs text-nexus-text-dim uppercase font-mono">CPA</p>
+                      <p className="text-lg font-bold mt-1 text-white">$4.12</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl border border-white/5 bg-black/20">
+                    <p className="text-[10px] text-nexus-text-dim uppercase tracking-widest mb-2 flex items-center gap-2">
+                      <Sparkles className="w-3 h-3" />
+                      AD Creative Variant
+                    </p>
+                    <p className="text-xs leading-relaxed text-white/80">{variant.creative}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 pt-8 border-t border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex -space-x-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="w-8 h-8 rounded-full bg-nexus-accent/20 border-2 border-nexus-bg flex items-center justify-center">
+                      <Users className="w-3.5 h-3.5 text-nexus-accent" />
+                    </div>
+                  ))}
+                </div>
+                <span className="text-[10px] text-nexus-text-dim uppercase font-mono">24,320 Nodes Monitored</span>
+              </div>
+              <div className="flex gap-4">
+                <button className="px-6 py-2 text-[10px] font-bold uppercase border border-white/10 rounded-xl hover:bg-white/5 transition-all">Pause Protocol</button>
+                <button className="px-6 py-2 text-[10px] font-bold uppercase bg-nexus-accent text-black rounded-xl hover:bg-white transition-all">Scale Winner</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
+  )}
+</div>
   );
 };
