@@ -45,7 +45,18 @@ async function startServer() {
 
   // --- API Routes ---
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    const currentAppUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      config: {
+        appUrl: currentAppUrl,
+        redirectUris: Object.keys(OAUTH_CONFIGS).reduce((acc, provider) => {
+          acc[provider] = `${currentAppUrl}/auth/callback/${provider}`;
+          return acc;
+        }, {} as Record<string, string>)
+      }
+    });
   });
 
   // Get Auth URL for a provider
@@ -93,15 +104,16 @@ async function startServer() {
     try {
       const redirectUri = `${process.env.APP_URL || `http://localhost:${PORT}`}/auth/callback/${provider}`;
       
-      const tokenResponse = await axios.post(config.tokenUrl, null, {
-        params: {
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: redirectUri,
-          client_id: config.clientId,
-          client_secret: config.clientSecret,
-        },
+      const params = new URLSearchParams();
+      params.append("grant_type", "authorization_code");
+      params.append("code", code as string);
+      params.append("redirect_uri", redirectUri);
+      params.append("client_id", config.clientId);
+      params.append("client_secret", config.clientSecret);
+
+      const tokenResponse = await axios.post(config.tokenUrl, params, {
         headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
         },
       });
