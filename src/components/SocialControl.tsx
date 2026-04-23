@@ -59,7 +59,7 @@ interface ScheduledPost {
   id: string;
   time: string;
   title: string;
-  platforms: any[];
+  platformIds: string[];
   status: "Ready" | "AI Generating" | "Scheduled" | "Draft";
   media?: { url: string; type: "image" | "video" }[];
   platformConfigs?: Record<string, any>;
@@ -103,6 +103,7 @@ export const SocialControl = () => {
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [tokens, setTokens] = useState<Record<string, any>>({});
   const [isInitiatingLive, setIsInitiatingLive] = useState(false);
+  const [postFilter, setPostFilter] = useState<"All" | "Scheduled" | "Draft">("All");
 
   const [presets, setPresets] = useState<{ name: string; configs: Record<string, any>; platforms: string[] }[]>(() => {
     const saved = localStorage.getItem("nexus_presets");
@@ -119,6 +120,17 @@ export const SocialControl = () => {
     } as any;
   });
 
+  const [callbackPresets, setCallbackPresets] = useState<Record<string, {name: string, config: any}[]>>(() => {
+    const saved = localStorage.getItem("nexus_callback_presets");
+    return saved ? JSON.parse(saved) : {
+      youtube: [],
+      linkedin: [],
+      twitter: [],
+      instagram: [],
+      facebook: []
+    };
+  });
+
   const [newPresetName, setNewPresetName] = useState("");
   const [showPresetSave, setShowPresetSave] = useState(false);
 
@@ -129,6 +141,10 @@ export const SocialControl = () => {
   useEffect(() => {
     localStorage.setItem("nexus_platform_presets", JSON.stringify(platformPresets));
   }, [platformPresets]);
+
+  useEffect(() => {
+    localStorage.setItem("nexus_callback_presets", JSON.stringify(callbackPresets));
+  }, [callbackPresets]);
 
   const savePreset = () => {
     if (!newPresetName.trim()) return;
@@ -174,8 +190,37 @@ export const SocialControl = () => {
     }));
   };
 
+  const saveCallbackPreset = (platform: string, name: string) => {
+    if (!name.trim()) return;
+    const config = JSON.parse(JSON.stringify(platformConfigs[platform].callback));
+    setCallbackPresets(prev => ({
+      ...prev,
+      [platform]: [...(prev[platform] || []), { name: name.trim(), config }]
+    }));
+  };
+
+  const loadCallbackPreset = (platform: string, config: any) => {
+    setPlatformConfigs(prev => ({
+      ...prev,
+      [platform]: {
+        ...prev[platform],
+        callback: JSON.parse(JSON.stringify(config))
+      }
+    }));
+  };
+
+  const deleteCallbackPreset = (platform: string, name: string) => {
+    setCallbackPresets(prev => ({
+      ...prev,
+      [platform]: (prev[platform] || []).filter(p => p.name !== name)
+    }));
+  };
+
   const [platformPresetNaming, setPlatformPresetNaming] = useState<string | null>(null);
   const [tempPlatformPresetName, setTempPlatformPresetName] = useState("");
+
+  const [callbackPresetNaming, setCallbackPresetNaming] = useState<string | null>(null);
+  const [tempCallbackPresetName, setTempCallbackPresetName] = useState("");
 
   const PlatformPresetManager = ({ platform, color }: { platform: string; color: string }) => {
     const platformPresetsList = platformPresets[platform] || [];
@@ -250,6 +295,161 @@ export const SocialControl = () => {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const CallbackSystemControl = ({ platform }: { platform: string }) => {
+    const config = platformConfigs[platform]?.callback || { enabled: false, trigger: "Comment", keywords: "", action: "CRM Entry" };
+    const presetsList = callbackPresets[platform] || [];
+    const isNaming = callbackPresetNaming === platform;
+    
+    return (
+      <div className="mt-4 p-3 rounded-xl bg-nexus-accent/5 border border-nexus-accent/20 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className={cn("w-3.5 h-3.5", config.enabled ? "text-nexus-accent animate-pulse" : "text-nexus-text-dim")} />
+            <span className="text-[10px] font-bold text-white uppercase tracking-tighter">Neural Callback Interface</span>
+          </div>
+          <button 
+            onClick={() => setPlatformConfigs(prev => ({
+              ...prev,
+              [platform]: {
+                ...prev[platform],
+                callback: { ...config, enabled: !config.enabled }
+              }
+            }))}
+            className={cn(
+              "px-2 py-0.5 rounded text-[8px] font-bold border transition-all",
+              config.enabled ? "bg-nexus-accent text-black border-nexus-accent" : "bg-white/5 text-nexus-text-dim border-white/10"
+            )}
+          >
+            {config.enabled ? "ACTIVE" : "STANDBY"}
+          </button>
+        </div>
+
+        {config.enabled && (
+          <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center justify-between pt-1 border-t border-white/5">
+              <span className="text-[9px] text-nexus-text-dim uppercase font-mono tracking-widest">Callback Presets</span>
+              <button 
+                onClick={() => {
+                  if (isNaming) {
+                    saveCallbackPreset(platform, tempCallbackPresetName);
+                    setCallbackPresetNaming(null);
+                    setTempCallbackPresetName("");
+                  } else {
+                    setCallbackPresetNaming(platform);
+                  }
+                }}
+                className={cn(
+                  "text-[8px] font-bold transition-all flex items-center gap-1 px-1.5 py-0.5 rounded border",
+                  isNaming ? "bg-nexus-accent text-black border-nexus-accent" : "text-nexus-accent border-nexus-accent/20 hover:bg-nexus-accent/10"
+                )}
+              >
+                {isNaming ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Save className="w-2.5 h-2.5" />}
+                {isNaming ? "OK" : "SAVE"}
+              </button>
+            </div>
+
+            {isNaming && (
+              <motion.div 
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-2"
+              >
+                <input 
+                  type="text"
+                  autoFocus
+                  value={tempCallbackPresetName}
+                  onChange={(e) => setTempCallbackPresetName(e.target.value)}
+                  placeholder="Callback Preset Name..."
+                  className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-[9px] text-white outline-none focus:border-nexus-accent/30"
+                />
+                <button 
+                  onClick={() => setCallbackPresetNaming(null)}
+                  className="px-1.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-all"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </motion.div>
+            )}
+
+            {presetsList.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 overflow-x-auto max-h-20 py-1 scrollbar-none">
+                {presetsList.map(p => (
+                  <div key={p.name} className="group relative">
+                    <button
+                      onClick={() => loadCallbackPreset(platform, p.config)}
+                      className={cn(
+                        "text-[8px] px-2 py-0.5 rounded border transition-all flex items-center gap-1 whitespace-nowrap",
+                        "bg-white/5 border-white/5 hover:border-nexus-accent/50 hover:bg-nexus-accent/10 text-nexus-text-dim hover:text-white"
+                      )}
+                    >
+                      <Bookmark className="w-2 h-2" />
+                      {p.name}
+                    </button>
+                    <button 
+                      onClick={() => deleteCallbackPreset(platform, p.name)}
+                      className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                    >
+                      <X className="w-2 h-2" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-1 border-t border-white/5">
+              <div className="space-y-1">
+                <label className="text-[8px] text-nexus-text-dim uppercase font-mono">Trigger Type</label>
+                <select 
+                  value={config.trigger}
+                  onChange={(e) => setPlatformConfigs(prev => ({
+                    ...prev,
+                    [platform]: { ...prev[platform], callback: { ...config, trigger: e.target.value } }
+                  }))}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-[9px] outline-none hover:border-nexus-accent/20 cursor-pointer transition-all"
+                >
+                  <option value="Comment">Comment</option>
+                  <option value="Mention">Mention</option>
+                  <option value="Message">Direct Message</option>
+                  <option value="Share">Share / Re-post</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[8px] text-nexus-text-dim uppercase font-mono">Automated Action</label>
+                <select 
+                  value={config.action}
+                  onChange={(e) => setPlatformConfigs(prev => ({
+                    ...prev,
+                    [platform]: { ...prev[platform], callback: { ...config, action: e.target.value } }
+                  }))}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-[9px] outline-none hover:border-nexus-accent/20 cursor-pointer transition-all"
+                >
+                  <option value="CRM Entry">Add to CRM</option>
+                  <option value="Lead Score">Lead Scoring</option>
+                  <option value="Auto-Reply">Neural Auto-Reply</option>
+                  <option value="Direct Message">Inbound DM</option>
+                  <option value="Email Sequence">Email Enrollment</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[8px] text-nexus-text-dim uppercase font-mono">Neural Keywords (CSV)</label>
+              <input 
+                type="text"
+                value={config.keywords}
+                onChange={(e) => setPlatformConfigs(prev => ({
+                  ...prev,
+                  [platform]: { ...prev[platform], callback: { ...config, keywords: e.target.value } }
+                }))}
+                placeholder="e.g. price, info, demo"
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-[9px] outline-none focus:border-nexus-accent/30 transition-all"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -353,11 +553,19 @@ export const SocialControl = () => {
     }
   };
 
-  const [posts, setPosts] = useState<ScheduledPost[]>([
-    { id: "1", time: "Today, 18:00", title: "Product Launch Teaser", platforms: [Instagram, Twitter], status: "Ready" },
-    { id: "2", time: "Tomorrow, 10:00", title: "Customer Success Story", platforms: [Linkedin, Facebook], status: "AI Generating" },
-    { id: "3", time: "Monday, 09:00", title: "Weekly Tech Roundup", platforms: [Twitter, Linkedin], status: "Scheduled" },
-  ]);
+  const [posts, setPosts] = useState<ScheduledPost[]>(() => {
+    const saved = localStorage.getItem("nexus_posts");
+    return saved ? JSON.parse(saved) : [
+      { id: "1", time: "Today, 18:00", title: "Product Launch Teaser", platformIds: ["instagram", "twitter"], status: "Scheduled" },
+      { id: "2", time: "Tomorrow, 10:00", title: "Customer Success Story", platformIds: ["linkedin", "facebook"], status: "Draft" },
+      { id: "3", time: "Monday, 09:00", title: "Weekly Tech Roundup", platformIds: ["twitter", "linkedin"], status: "Scheduled" },
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("nexus_posts", JSON.stringify(posts));
+  }, [posts]);
+
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
 
   // Analytics Filters
@@ -372,17 +580,18 @@ export const SocialControl = () => {
   const [attachedMedia, setAttachedMedia] = useState<{ url: string; type: "image" | "video" }[]>([]);
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [platformConfigs, setPlatformConfigs] = useState<Record<string, any>>({
-    twitter: { charLimit: 280, thread: false },
-    instagram: { ratio: "1:1", autoCrop: true },
+    twitter: { charLimit: 280, thread: false, callback: { enabled: false, trigger: "Mention", keywords: "help, info", action: "Lead Score" } },
+    instagram: { ratio: "1:1", autoCrop: true, callback: { enabled: false, trigger: "Comment", keywords: "price, buy", action: "Direct Message" } },
     linkedin: { 
       visibility: "Public",
       isLive: false,
       description: "",
       streamTitle: "",
       streamDate: "",
-      streamTime: ""
+      streamTime: "",
+      callback: { enabled: false, trigger: "Comment", keywords: "interested, demo", action: "CRM Entry" }
     },
-    facebook: { audience: "Public" },
+    facebook: { audience: "Public", callback: { enabled: false, trigger: "Message", keywords: "details", action: "Auto-Reply" } },
     youtube: { 
       visibility: "public", 
       category: "Entertainment", 
@@ -390,7 +599,8 @@ export const SocialControl = () => {
       description: "",
       streamTitle: "",
       streamDate: "",
-      streamTime: ""
+      streamTime: "",
+      callback: { enabled: false, trigger: "Comment", keywords: "tutorial, link", action: "Email Sequence" }
     }
   });
   
@@ -463,7 +673,7 @@ export const SocialControl = () => {
   const openEditModal = (post: ScheduledPost) => {
     setEditingPostId(post.id);
     setNewPostTitle(post.title);
-    setSelectedPlatforms(PLATFORMS.filter(p => post.platforms.includes(p.icon)).map(p => p.id));
+    setSelectedPlatforms(post.platformIds);
     
     // Parse time
     if (post.time !== "Not Scheduled") {
@@ -517,7 +727,7 @@ export const SocialControl = () => {
       id: editingPostId || Math.random().toString(36).substr(2, 9),
       title: newPostTitle,
       time: status === "Draft" ? "Not Scheduled" : `${scheduleDate}, ${scheduleTime}`,
-      platforms: PLATFORMS.filter(p => selectedPlatforms.includes(p.id)).map(p => p.icon),
+      platformIds: [...selectedPlatforms],
       status,
       media: attachedMedia,
       platformConfigs: { ...platformConfigs }
@@ -756,13 +966,31 @@ export const SocialControl = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-6">
                 <div className="glass p-6 rounded-3xl">
-                  <h3 className="text-lg font-display font-semibold mb-6 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-nexus-accent" />
-                    Content Queue
-                  </h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-display font-semibold flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-nexus-accent" />
+                      Content Queue
+                    </h3>
+                    <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/5">
+                      {["All", "Scheduled", "Draft"].map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => setPostFilter(f as any)}
+                          className={cn(
+                            "px-3 py-1 rounded-lg text-[10px] font-bold transition-all",
+                            postFilter === f ? "bg-nexus-accent text-black" : "text-nexus-text-dim hover:text-white"
+                          )}
+                        >
+                          {f.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="space-y-4">
                     <AnimatePresence initial={false}>
-                      {posts.map((post) => (
+                      {posts
+                        .filter(p => postFilter === "All" || p.status === postFilter)
+                        .map((post) => (
                         <motion.div 
                           key={post.id}
                           initial={{ opacity: 0, x: -20 }}
@@ -804,11 +1032,15 @@ export const SocialControl = () => {
                             </div>
                             <div className="flex items-center gap-4">
                               <div className="flex -space-x-2">
-                                {post.platforms.map((Icon, j) => (
-                                  <div key={j} className="w-6 h-6 rounded-full bg-nexus-bg border border-nexus-border flex items-center justify-center">
-                                    <Icon className="w-3 h-3 text-nexus-text-dim" />
-                                  </div>
-                                ))}
+                                {post.platformIds.map((pid, j) => {
+                                  const platform = PLATFORMS.find(p => p.id === pid);
+                                  const Icon = platform?.icon || Share2;
+                                  return (
+                                    <div key={j} className="w-6 h-6 rounded-full bg-nexus-bg border border-nexus-border flex items-center justify-center">
+                                      <Icon className="w-3 h-3 text-nexus-text-dim" />
+                                    </div>
+                                  );
+                                })}
                               </div>
                               <span className={cn(
                                 "text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-widest",
@@ -1608,6 +1840,8 @@ export const SocialControl = () => {
                               <option value="4000">4000 (Premium)</option>
                             </select>
                           </div>
+
+                          <CallbackSystemControl platform="twitter" />
                         </div>
                       )}
 
@@ -1639,6 +1873,8 @@ export const SocialControl = () => {
                               ))}
                             </div>
                           </div>
+
+                          <CallbackSystemControl platform="instagram" />
                         </div>
                       )}
 
@@ -1774,6 +2010,29 @@ export const SocialControl = () => {
                                   </div>
                                 </div>
                               </div>
+
+                              <CallbackSystemControl platform="youtube" />
+                            </div>
+                          )}
+
+                          {!platformConfigs.youtube.isLive && (
+                            <div className="space-y-4">
+                              <PlatformPresetManager platform="youtube" color="red-500" />
+                              
+                              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                <span className="text-[10px] text-nexus-text-dim uppercase">Visibility Settings</span>
+                                <select 
+                                  value={platformConfigs.youtube.visibility}
+                                  onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, visibility: e.target.value } }))}
+                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none"
+                                >
+                                  <option value="public">🌍 Public (Broadcast)</option>
+                                  <option value="unlisted">🔗 Unlisted</option>
+                                  <option value="private">🔒 Private</option>
+                                </select>
+                              </div>
+
+                              <CallbackSystemControl platform="youtube" />
                             </div>
                           )}
                         </div>
@@ -1893,6 +2152,28 @@ export const SocialControl = () => {
                                   </select>
                                 </div>
                               </div>
+
+                              <CallbackSystemControl platform="linkedin" />
+                            </div>
+                          )}
+
+                          {!platformConfigs.linkedin.isLive && (
+                            <div className="space-y-3">
+                               <PlatformPresetManager platform="linkedin" color="blue-600" />
+                               
+                               <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                 <span className="text-[10px] text-nexus-text-dim uppercase">Visibility Level</span>
+                                 <select 
+                                   value={platformConfigs.linkedin.visibility}
+                                   onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, visibility: e.target.value } }))}
+                                   className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none"
+                                 >
+                                   <option value="Public">🌍 Public</option>
+                                   <option value="Connections Only">👥 Connections Only</option>
+                                 </select>
+                               </div>
+
+                               <CallbackSystemControl platform="linkedin" />
                             </div>
                           )}
                         </div>
@@ -1925,6 +2206,8 @@ export const SocialControl = () => {
                               <option value="Private">Only Me</option>
                             </select>
                           </div>
+
+                          <CallbackSystemControl platform="facebook" />
                         </div>
                       )}
                     </div>

@@ -78,6 +78,7 @@ export const AIEngine = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>("16:9");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [personality, setPersonality] = useState<PersonalityMode>("Stealth");
   const [isCapturingVoice, setIsCapturingVoice] = useState(false);
@@ -141,7 +142,7 @@ export const AIEngine = () => {
         },
         config: {
           imageConfig: {
-            aspectRatio: "16:9"
+            aspectRatio: selectedAspectRatio
           }
         }
       });
@@ -367,6 +368,25 @@ export const AIEngine = () => {
             className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-nexus-text-dim py-2"
           />
           <div className="flex items-center gap-1 pr-2">
+            <div className="relative group/ratio">
+              <button className="p-2 hover:bg-white/5 text-nexus-text-dim transition-all rounded-xl flex items-center gap-1">
+                <span className="text-[10px] font-mono font-bold">{selectedAspectRatio}</span>
+              </button>
+              <div className="absolute bottom-full right-0 mb-2 p-1 glass border border-white/10 rounded-xl hidden group-hover/ratio:block min-w-[80px] z-50">
+                {["1:1", "16:9", "9:16", "4:3", "3:2"].map(ratio => (
+                  <button
+                    key={ratio}
+                    onClick={() => setSelectedAspectRatio(ratio)}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 rounded-lg text-[10px] font-mono transition-colors",
+                      selectedAspectRatio === ratio ? "bg-nexus-accent text-black" : "text-nexus-text-dim hover:bg-white/5 hover:text-white"
+                    )}
+                  >
+                    {ratio}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button 
               onClick={() => setIsCapturingVoice(!isCapturingVoice)}
               className={cn(

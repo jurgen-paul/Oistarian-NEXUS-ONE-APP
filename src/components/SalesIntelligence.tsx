@@ -62,7 +62,7 @@ const INITIAL_CALLBACKS: CallbackRequest[] = [
     status: "In-Progress",
     requestedTime: "15:00",
     priority: "Medium",
-    source: "Pricing Page",
+    source: "LinkedIn",
     notes: "Question about API limits.",
     createdAt: "2026-04-22T09:15:00Z",
     leadScore: 62,
@@ -106,7 +106,8 @@ export const SalesIntelligence = () => {
   const [newCallback, setNewCallback] = useState<Partial<CallbackRequest>>({
     priority: "Medium",
     status: "Pending",
-    source: "Manual Entry"
+    source: "Manual Entry",
+    leadScore: 50
   });
 
   const filteredCallbacks = useMemo(() => {
@@ -134,21 +135,26 @@ export const SalesIntelligence = () => {
   const addCallback = () => {
     if (!newCallback.customerName || !newCallback.phoneNumber) return;
     const callback: CallbackRequest = {
-      id: `CB-00${callbacks.length + 1}`,
+      id: `CB-${(callbacks.length + 1).toString().padStart(3, '0')}`,
       customerName: newCallback.customerName!,
       phoneNumber: newCallback.phoneNumber!,
       status: "Pending",
       requestedTime: newCallback.requestedTime || "ASAP",
       priority: newCallback.priority || "Medium",
-      source: "NEURAL HUB",
+      source: newCallback.source || "Manual Entry",
       notes: newCallback.notes || "",
       createdAt: new Date().toISOString(),
-      leadScore: Math.floor(Math.random() * 40) + 60, // Default higher for new leads
+      leadScore: newCallback.leadScore || Math.floor(Math.random() * 40) + 40, 
       followUpStatus: "Idle"
     };
     setCallbacks([callback, ...callbacks]);
     setIsAddingCallback(false);
-    setNewCallback({ priority: "Medium", status: "Pending", source: "Manual Entry" });
+    setNewCallback({
+      priority: "Medium",
+      status: "Pending",
+      source: "Manual Entry",
+      leadScore: 50
+    });
   };
 
   return (
@@ -252,6 +258,7 @@ export const SalesIntelligence = () => {
           <thead>
             <tr className="border-b border-white/5 bg-white/5">
               <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Lead Entity</th>
+              <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Origin Source</th>
               <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Neural Score</th>
               <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Sequence</th>
               <th className="px-6 py-4 text-[10px] font-mono text-nexus-text-dim uppercase tracking-widest">Status</th>
@@ -278,6 +285,12 @@ export const SalesIntelligence = () => {
                         <p className="font-bold text-sm tracking-tight">{cb.customerName}</p>
                         <p className="text-xs text-nexus-text-dim font-mono">{cb.phoneNumber}</p>
                       </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                       <Target className="w-3 h-3 text-nexus-text-dim" />
+                       <span className="text-[10px] font-mono text-nexus-text-dim uppercase tracking-wider">{cb.source}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -507,6 +520,46 @@ export const SalesIntelligence = () => {
                       <option value="Medium">STANDARD</option>
                       <option value="Low">RELAXED</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-mono text-nexus-text-dim uppercase flex justify-between">
+                    Neural Score Assessment
+                    <span className="text-nexus-accent">{newCallback.leadScore || 50}%</span>
+                  </label>
+                  <input 
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={newCallback.leadScore || 50}
+                    onChange={(e) => setNewCallback({ ...newCallback, leadScore: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-nexus-accent"
+                  />
+                  <div className="flex justify-between text-[8px] font-mono text-nexus-text-dim uppercase mt-1">
+                    <span>Low Probability</span>
+                    <span>High Probability</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-mono text-nexus-text-dim uppercase">Neural Origin Source</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["Landing Page", "Support Bot", "Mobile App", "Manual Entry", "LinkedIn", "Twitter"].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setNewCallback({ ...newCallback, source: s })}
+                        className={cn(
+                          "px-2 py-2 rounded-xl border text-[9px] font-bold uppercase transition-all whitespace-nowrap",
+                          newCallback.source === s 
+                            ? "bg-nexus-accent/10 border-nexus-accent text-nexus-accent shadow-[0_0_10px_rgba(5,255,161,0.1)]" 
+                            : "bg-white/5 border-white/5 text-nexus-text-dim hover:border-white/20"
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
