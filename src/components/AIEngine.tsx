@@ -19,7 +19,9 @@ import {
   Layers,
   History,
   X,
-  TrendingUp
+  TrendingUp,
+  Trash2,
+  Plus
 } from "lucide-react";
 import { GoogleGenAI, Modality } from "@google/genai";
 import ReactMarkdown from "react-markdown";
@@ -36,7 +38,23 @@ interface Message {
   personality?: PersonalityMode;
 }
 
+interface ConversationSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  personality: PersonalityMode;
+  timestamp: number;
+}
+
 type PersonalityMode = "Creative" | "Analytical" | "Professional" | "Stealth";
+
+const INITIAL_MESSAGE: Message = { 
+  role: "assistant", 
+  content: "Neural core online. NEXUS ONE Unified AI Engine at your service. How can I assist your digital universe today?",
+  personality: "Stealth"
+};
+
+const STORAGE_KEY = "nexus_ai_sessions";
 
 const Shield = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -68,13 +86,22 @@ const PERSONALITIES: Record<PersonalityMode, { icon: any; color: string; instruc
 };
 
 export const AIEngine = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    { 
-      role: "assistant", 
-      content: "Neural core online. NEXUS ONE Unified AI Engine at your service. How can I assist your digital universe today?",
-      personality: "Stealth"
+  const [sessions, setSessions] = useState<ConversationSession[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse neural history", e);
+      }
     }
-  ]);
+    return [];
+  });
+  
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
+  const [historySearch, setHistorySearch] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -87,6 +114,83 @@ export const AIEngine = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const recognitionRef = useRef<any>(null);
+
+  // Sync sessions to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  }, [sessions]);
+
+  // Handle active session and auto-creation
+  useEffect(() => {
+    if (activeSessionId) {
+      const active = sessions.find(s => s.id === activeSessionId);
+      if (active) {
+        setMessages(active.messages);
+        setPersonality(active.personality);
+      }
+    }
+  }, [activeSessionId]);
+
+  const createNewSession = () => {
+    const newSession: ConversationSession = {
+      id: Math.random().toString(36).substring(7),
+      title: "New Protocol",
+      messages: [INITIAL_MESSAGE],
+      personality: "Stealth",
+      timestamp: Date.now()
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSessionId(newSession.id);
+    setMessages([INITIAL_MESSAGE]);
+    setPersonality("Stealth");
+    setShowHistory(false);
+  };
+
+  const updateActiveSession = (newMessages: Message[]) => {
+    if (!activeSessionId) {
+      // First message in a new session (implicitly created if none active)
+      const id = Math.random().toString(36).substring(7);
+      const title = newMessages.find(m => m.role === "user")?.content.substring(0, 30) + "..." || "New Protocol";
+      const newSession: ConversationSession = {
+        id,
+        title,
+        messages: newMessages,
+        personality,
+        timestamp: Date.now()
+      };
+      setSessions(prev => [newSession, ...prev]);
+      setActiveSessionId(id);
+    } else {
+      setSessions(prev => prev.map(s => {
+        if (s.id === activeSessionId) {
+          // Update title if it was default and we have a user msg
+          let title = s.title;
+          if (title === "New Protocol") {
+            const firstUserMsg = newMessages.find(m => m.role === "user")?.content;
+            if (firstUserMsg) {
+              title = firstUserMsg.substring(0, 40) + (firstUserMsg.length > 40 ? "..." : "");
+            }
+          }
+          return { ...s, messages: newMessages, personality, title, timestamp: Date.now() };
+        }
+        return s;
+      }));
+    }
+  };
+
+  const deleteSession = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessions(prev => prev.filter(s => s.id !== id));
+    if (activeSessionId === id) {
+      setActiveSessionId(null);
+      setMessages([INITIAL_MESSAGE]);
+    }
+  };
+
+  const filteredSessions = sessions.filter(s => 
+    s.title.toLowerCase().includes(historySearch.toLowerCase()) ||
+    s.messages.some(m => m.content.toLowerCase().includes(historySearch.toLowerCase()))
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
@@ -187,7 +291,11 @@ export const AIEngine = () => {
 
   const generateImage = async (prompt: string) => {
     setIsGeneratingImage(true);
-    setMessages(prev => [...prev, { role: "user", content: `Neural Visual Synthesis: ${prompt}` }]);
+    const userMsg: Message = { role: "user", content: `Neural Visual Synthesis: ${prompt}` };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    updateActiveSession(updatedMessages);
+
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-image-preview',
@@ -209,13 +317,16 @@ export const AIEngine = () => {
         for (const part of response.candidates[0].content.parts) {
           if (part.inlineData) {
             const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
-            setMessages(prev => [...prev, { 
+            const assistantMsg: Message = { 
               role: "assistant", 
               content: `Visual synthesis complete for protocol: ${prompt}. Aspect Ratio: ${selectedAspectRatio} | Output: ${selectedImageSize}`,
               type: "image",
               attachments: [imageUrl],
               personality
-            }]);
+            };
+            const finalMessages = [...updatedMessages, assistantMsg];
+            setMessages(finalMessages);
+            updateActiveSession(finalMessages);
             foundImage = true;
             break;
           }
@@ -227,11 +338,14 @@ export const AIEngine = () => {
       }
     } catch (error: any) {
       console.error("Image Gen Error:", error);
-      setMessages(prev => [...prev, { 
+      const errorMsg: Message = { 
         role: "assistant", 
         content: `Visual synthesis failed: ${error.message || "Unknown neural interference"}.`, 
         personality 
-      }]);
+      };
+      const finalMessages = [...updatedMessages, errorMsg];
+      setMessages(finalMessages);
+      updateActiveSession(finalMessages);
     } finally {
       setIsGeneratingImage(false);
       setIsImageMode(false);
@@ -253,7 +367,10 @@ export const AIEngine = () => {
       }
     }
 
-    setMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    const newUserMsg: Message = { role: "user", content: userMessage };
+    const updatedMessages = [...messages, newUserMsg];
+    setMessages(updatedMessages);
+    updateActiveSession(updatedMessages);
     setIsLoading(true);
 
     // Simulate Neural Compute Activation
@@ -262,7 +379,7 @@ export const AIEngine = () => {
     try {
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [...messages, { role: "user", content: userMessage }].map(m => ({
+        contents: updatedMessages.map(m => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }]
         })),
@@ -272,10 +389,14 @@ export const AIEngine = () => {
       });
 
       const assistantMessage = response.text || "I encountered a neural synchronization error. Please retry.";
-      setMessages(prev => [...prev, { role: "assistant", content: assistantMessage, personality }]);
+      const finalMessages: Message[] = [...updatedMessages, { role: "assistant", content: assistantMessage, personality }];
+      setMessages(finalMessages);
+      updateActiveSession(finalMessages);
     } catch (error) {
       console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: "assistant", content: "Neural link interrupted. Check your connection or API configuration.", personality }]);
+      const errorMsg: Message[] = [...updatedMessages, { role: "assistant", content: "Neural link interrupted. Check your connection or API configuration.", personality }];
+      setMessages(errorMsg);
+      updateActiveSession(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -516,7 +637,7 @@ export const AIEngine = () => {
           </button>
         </div>
         
-        <div className="mt-4 flex items-center justify-between px-2">
+      <div className="mt-4 flex items-center justify-between px-2">
           <div className="flex gap-4">
             {[
               { label: "Market Intel", icon: TrendingUp },
@@ -533,29 +654,121 @@ export const AIEngine = () => {
               </button>
             ))}
           </div>
-          <button className="text-[10px] font-mono uppercase tracking-widest text-nexus-text-dim hover:text-white flex items-center gap-1 group">
+          <button 
+            onClick={() => setShowHistory(true)}
+            className="text-[10px] font-mono uppercase tracking-widest text-nexus-text-dim hover:text-white flex items-center gap-1 group"
+          >
             <History className="w-3 h-3 transition-transform group-hover:rotate-12" />
             Neural History
           </button>
         </div>
+
+        <AnimatePresence>
+          {showHistory && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-xl"
+            >
+              <div className="glass w-full max-w-2xl h-[80vh] rounded-3xl overflow-hidden flex flex-col border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+                <header className="p-6 border-b border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <History className="w-5 h-5 text-nexus-accent" />
+                    <h3 className="text-lg font-display font-bold uppercase tracking-tight">Neural Repository</h3>
+                  </div>
+                  <button 
+                    onClick={() => setShowHistory(false)}
+                    className="p-2 hover:bg-white/10 rounded-xl transition-all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </header>
+
+                <div className="p-4 border-b border-white/5">
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                      placeholder="SEARCH NEURAL ARCHIVES..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-nexus-accent/30 transition-all pl-10"
+                    />
+                    <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-nexus-text-dim" />
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                  <button 
+                    onClick={createNewSession}
+                    className="w-full p-4 rounded-2xl bg-nexus-accent/10 border border-nexus-accent/30 flex items-center justify-between group hover:bg-nexus-accent/20 transition-all mb-4"
+                  >
+                    <div className="flex items-center gap-3 text-nexus-accent">
+                      <Plus className="w-5 h-5" />
+                      <span className="text-xs font-bold uppercase tracking-widest">Initiate New Protocol</span>
+                    </div>
+                    <Zap className="w-4 h-4 text-nexus-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+
+                  {filteredSessions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-48 opacity-40">
+                      <BrainCircuit className="w-12 h-12 mb-4" />
+                      <p className="text-xs font-mono">NO SYNCED PROTOCOLS DETECTED</p>
+                    </div>
+                  ) : (
+                    filteredSessions.map(session => (
+                      <button
+                        key={session.id}
+                        onClick={() => {
+                          setActiveSessionId(session.id);
+                          setShowHistory(false);
+                        }}
+                        className={cn(
+                          "w-full p-4 rounded-2xl border transition-all text-left group relative",
+                          activeSessionId === session.id 
+                            ? "bg-white/10 border-nexus-accent/50" 
+                            : "bg-white/5 border-white/10 hover:border-white/20"
+                        )}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className={cn(
+                            "text-sm font-bold truncate pr-8",
+                            activeSessionId === session.id ? "text-nexus-accent" : "text-white"
+                          )}>
+                            {session.title}
+                          </h4>
+                          <span className="text-[10px] font-mono text-nexus-text-dim">
+                            {new Date(session.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-nexus-text-dim line-clamp-1 italic mb-2">
+                          {session.messages[session.messages.length - 1].content.substring(0, 100)}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={cn("px-2 py-0.5 rounded-md bg-white/5 text-[8px] font-bold uppercase tracking-tighter", PERSONALITIES[session.personality].color)}>
+                              {session.personality} Mode
+                            </div>
+                            <span className="text-[9px] font-mono text-nexus-text-dim opacity-60">
+                              {session.messages.length} NODES
+                            </span>
+                          </div>
+                          <button 
+                            onClick={(e) => deleteSession(session.id, e)}
+                            className="p-1.5 rounded-lg hover:bg-red-500/20 text-nexus-text-dim hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
 };
-
-const Plus = ({ className }: { className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="24" 
-    height="24" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <path d="M5 12h14" /><path d="M12 5v14" />
-  </svg>
-);

@@ -38,7 +38,8 @@ import {
   Activity,
   Type,
   AlignLeft,
-  Monitor
+  Monitor,
+  Shield
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { GoogleGenAI } from "@google/genai";
@@ -102,6 +103,9 @@ export const SocialControl = () => {
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [connectedPlatforms, setConnectedPlatforms] = useState<string[]>([]);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<{provider: string, message: string} | null>(null);
+  const [showLinkedInDiagnostic, setShowLinkedInDiagnostic] = useState(false);
+  const [showFacebookDiagnostic, setShowFacebookDiagnostic] = useState(false);
   const [tokens, setTokens] = useState<Record<string, any>>({});
   const [isInitiatingLive, setIsInitiatingLive] = useState(false);
   const [postFilter, setPostFilter] = useState<"All" | "Scheduled" | "Draft">("All");
@@ -520,6 +524,18 @@ export const SocialControl = () => {
         setConnectedPlatforms(prev => [...new Set([...prev, provider])]);
         setTokens(prev => ({ ...prev, [provider]: newTokens }));
         setIsConnecting(null);
+        setConnectionError(null);
+        setShowLinkedInDiagnostic(false);
+        setShowFacebookDiagnostic(false);
+      } else if (event.data?.type === 'OAUTH_AUTH_FAILURE') {
+        const { provider, error } = event.data;
+        setConnectionError({ provider, message: error || "Authentication failed" });
+        setIsConnecting(null);
+        if (provider === 'linkedin') {
+          setShowLinkedInDiagnostic(true);
+        } else if (provider === 'facebook') {
+          setShowFacebookDiagnostic(true);
+        }
       }
     };
     window.addEventListener('message', handleMessage);
@@ -528,9 +544,10 @@ export const SocialControl = () => {
 
   const handleConnect = async (provider: string) => {
     setIsConnecting(provider);
+    setConnectionError(null);
     try {
       const response = await fetch(`/api/auth/${provider}/url`);
-      if (!response.ok) throw new Error('Failed to get auth URL');
+      if (!response.ok) throw new Error('Neural interface failed to generate authorization link.');
       const { url } = await response.json();
 
       const width = 600;
@@ -545,11 +562,33 @@ export const SocialControl = () => {
       );
 
       if (!authWindow) {
-        alert('Neural link blocked by browser. Please allow popups.');
+        setConnectionError({ 
+          provider, 
+          message: 'Neural link blocked by browser. Please authorize popups in your terminal settings.' 
+        });
         setIsConnecting(null);
+        return;
       }
-    } catch (error) {
+
+      // Check if window is closed by user
+      const checkWindowContent = setInterval(() => {
+        if (authWindow.closed) {
+          clearInterval(checkWindowContent);
+          setIsConnecting(prev => {
+            if (prev === provider) {
+              return null;
+            }
+            return prev;
+          });
+        }
+      }, 1000);
+
+    } catch (error: any) {
       console.error('Connection error:', error);
+      setConnectionError({ 
+        provider, 
+        message: error.message || 'Quantum stabilization failure in neural link.' 
+      });
       setIsConnecting(null);
     }
   };
@@ -848,15 +887,39 @@ export const SocialControl = () => {
     );
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFiles = (files: FileList | null) => {
     if (!files) return;
 
     Array.from(files).forEach(file => {
       const url = URL.createObjectURL(file);
       const type = file.type.startsWith("video") ? "video" : "image";
-      setAttachedMedia(prev => [...prev, { url, type }]);
+      setAttachedMedia(prev => {
+        if (prev.length >= 4) return prev;
+        return [...prev, { url, type }];
+      });
     });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(e.target.files);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFiles(e.dataTransfer.files);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
   };
 
   const removeMedia = (index: number) => {
@@ -1056,45 +1119,224 @@ export const SocialControl = () => {
             className="space-y-8"
           >
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {PLATFORMS.map((platform, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => !connectedPlatforms.includes(platform.provider) && handleConnect(platform.provider)}
-                  disabled={isConnecting === platform.provider}
-                  className={cn(
-                    "glass p-4 rounded-2xl flex items-center gap-4 text-left transition-all group",
-                    connectedPlatforms.includes(platform.provider) ? "border-nexus-accent/30" : "hover:border-nexus-accent/50"
-                  )}
+               {PLATFORMS.map((platform, i) => {
+                 const isConnected = connectedPlatforms.includes(platform.provider);
+                 const isThisConnecting = isConnecting === platform.provider;
+                 const hasError = connectionError?.provider === platform.provider;
+
+                 return (
+                   <button 
+                     key={i} 
+                     onClick={() => !isConnected && handleConnect(platform.provider)}
+                     disabled={isThisConnecting}
+                     className={cn(
+                       "glass p-4 rounded-2xl flex items-center gap-4 text-left transition-all group relative",
+                       isConnected ? "border-green-500/30 bg-green-500/5" : hasError ? "border-red-500/30 bg-red-500/5" : "hover:border-nexus-accent/50"
+                     )}
+                   >
+                     <div className={cn(
+                       "p-2 rounded-lg bg-white/5 transition-colors", 
+                       platform.color,
+                       isConnected && "bg-green-500/20 text-green-500",
+                       hasError && "bg-red-500/20 text-red-500"
+                     )}>
+                       {isThisConnecting ? (
+                         <Loader2 className="w-5 h-5 animate-spin" />
+                       ) : isConnected ? (
+                         <CheckCircle2 className="w-5 h-5" />
+                       ) : hasError ? (
+                         <AlertCircle className="w-5 h-5" />
+                       ) : (
+                         <platform.icon className="w-5 h-5" />
+                       )}
+                     </div>
+                     <div className="flex-1">
+                       <p className={cn(
+                         "text-sm font-bold",
+                         isConnected ? "text-green-500" : hasError ? "text-red-500" : "text-white"
+                       )}>{platform.name}</p>
+                       <div className="flex items-center gap-1">
+                         <div className={cn(
+                           "w-1.5 h-1.5 rounded-full",
+                           isConnected ? "bg-green-500 animate-pulse" : hasError ? "bg-red-500" : "bg-nexus-text-dim"
+                         )} />
+                         <p className="text-[10px] text-nexus-text-dim uppercase tracking-widest font-mono">
+                           {isThisConnecting ? "Initiating..." : isConnected ? "Verified" : hasError ? "Failed" : "Link Neural Interface"}
+                         </p>
+                       </div>
+                     </div>
+                     {!isConnected && !isThisConnecting && !hasError && (
+                       <Link2 className="w-4 h-4 text-nexus-text-dim opacity-0 group-hover:opacity-100 transition-opacity" />
+                     )}
+                     {hasError && (
+                       <div className="absolute inset-x-0 -bottom-1 flex justify-center">
+                         <div className="bg-red-500 text-white text-[8px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter shadow-lg">
+                           Interface Error
+                         </div>
+                       </div>
+                     )}
+                   </button>
+                 );
+               })}
+            </div>
+            
+            {/* LinkedIn Neural Diagnostic Interface */}
+            <AnimatePresence>
+              {showLinkedInDiagnostic && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
                 >
-                  <div className={cn(
-                    "p-2 rounded-lg bg-white/5 transition-colors", 
-                    platform.color,
-                    connectedPlatforms.includes(platform.provider) && "bg-nexus-accent/10"
-                  )}>
-                    {isConnecting === platform.provider ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <platform.icon className="w-5 h-5" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold">{platform.name}</p>
-                    <div className="flex items-center gap-1">
-                      <div className={cn(
-                        "w-1.5 h-1.5 rounded-full",
-                        connectedPlatforms.includes(platform.provider) ? "bg-green-500" : "bg-nexus-text-dim"
-                      )} />
-                      <p className="text-[10px] text-nexus-text-dim uppercase tracking-widest">
-                        {connectedPlatforms.includes(platform.provider) ? "Connected" : "Link Account"}
-                      </p>
+                  <div className="glass p-6 rounded-3xl border border-red-500/20 bg-red-500/5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-red-500">LinkedIn Neural Diagnostic</h4>
+                      </div>
+                      <button 
+                        onClick={() => setShowLinkedInDiagnostic(false)}
+                        className="p-1 hover:bg-white/10 rounded-lg transition-all"
+                      >
+                        <X className="w-4 h-4 text-nexus-text-dim" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl bg-black/40 border border-white/5 font-mono text-[11px] space-y-2">
+                        <p className="text-nexus-text-dim uppercase tracking-tighter">ERROR CODE: <span className="text-red-400">{connectionError?.message || "PX-SYNC-LNK-01"}</span></p>
+                        <p className="text-white/80 leading-relaxed italic border-l-2 border-nexus-accent pl-3">
+                          "Neural synchronization with LinkedIn professional database failed. Authorization handshake was rejected by the host node."
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-nexus-text-dim">Potential Root Causes</p>
+                          <ul className="space-y-1.5">
+                            {[
+                              "User aborted the neural authorization handshake.",
+                              "LinkedIn API Quota or Developer Tier restrictions.",
+                              "Mismatched Redirect URI in LinkedIn Neural Dashboard.",
+                              "Insufficient permissions granted during protocol sync."
+                            ].map((cause, i) => (
+                              <li key={i} className="flex items-center gap-2 text-[10px] text-white/60">
+                                <Activity className="w-3 h-3 text-red-500/50" />
+                                {cause}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-nexus-accent">Protocol Remediation</p>
+                          <div className="space-y-2">
+                            <button 
+                              onClick={() => handleConnect('linkedin')}
+                              className="w-full py-2 bg-nexus-accent text-black text-[10px] font-bold rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+                            >
+                              <Zap className="w-3 h-3" />
+                              RETRY NEURAL SYNC
+                            </button>
+                            <a 
+                              href="https://www.linkedin.com/developers/apps" 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="w-full py-2 bg-white/5 border border-white/10 text-white text-[10px] font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-all font-mono"
+                            >
+                              <Monitor className="w-3 h-3" />
+                              CHECK LINKEDIN DEV CONSOLE
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="pt-2 flex items-center justify-center">
+                        <p className="text-[9px] text-nexus-text-dim uppercase tracking-tighter font-mono">
+                          STATUS: WAITING FOR USER ACTION | LATENCY: <span className="text-nexus-accent">14ms</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  {!connectedPlatforms.includes(platform.provider) && (
-                    <Link2 className="w-4 h-4 text-nexus-text-dim opacity-0 group-hover:opacity-100 transition-opacity" />
-                  )}
-                </button>
-              ))}
-            </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Facebook Neural Diagnostic Interface */}
+            <AnimatePresence>
+              {showFacebookDiagnostic && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="glass p-6 rounded-3xl border border-blue-500/20 bg-blue-500/5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Facebook className="w-5 h-5 text-blue-500" />
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-blue-500">Facebook Protocol Failure</h4>
+                      </div>
+                      <button 
+                        onClick={() => setShowFacebookDiagnostic(false)}
+                        className="p-1 hover:bg-white/10 rounded-lg transition-all"
+                      >
+                        <X className="w-4 h-4 text-nexus-text-dim" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl bg-black/40 border border-white/5 font-mono text-[11px] space-y-2">
+                        <p className="text-nexus-text-dim uppercase tracking-tighter">ERROR: <span className="text-red-400">{connectionError?.message || "FB-LINK-ERR-07"}</span></p>
+                        <p className="text-white/80 leading-relaxed italic border-l-2 border-blue-500 pl-3">
+                          "Meta Graph API handshake rejected. Neural tether failed to establish secure tunnel to social node."
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-nexus-text-dim">Host Rejection Log</p>
+                          <ul className="space-y-1.5">
+                            {[
+                              "Handshake timeout during token exchange.",
+                              "App ID or App Secret mismatch in environment headers.",
+                              "Facebook Business permissions not verified.",
+                              "Redirect URL mismatch in Meta Developer Console."
+                            ].map((cause, i) => (
+                              <li key={i} className="flex items-center gap-2 text-[10px] text-white/60">
+                                <Activity className="w-3 h-3 text-blue-500/50" />
+                                {cause}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-nexus-accent">Quantum Recovery</p>
+                          <div className="space-y-2">
+                            <button 
+                              onClick={() => handleConnect('facebook')}
+                              className="w-full py-2 bg-nexus-accent text-black text-[10px] font-bold rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+                            >
+                              <Zap className="w-3 h-3" />
+                              RE-ESTABLISH LINK
+                            </button>
+                            <a 
+                              href="https://developers.facebook.com/apps/" 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="w-full py-2 bg-white/5 border border-white/10 text-white text-[10px] font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-all font-mono"
+                            >
+                              <Monitor className="w-3 h-3" />
+                              META DEV CONSOLE
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-6">
@@ -1809,7 +2051,15 @@ export const SocialControl = () => {
 
                 <div>
                   <label className="text-xs font-mono text-nexus-text-dim uppercase tracking-widest mb-3 block">Media Assets</label>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div 
+                    className={cn(
+                      "grid grid-cols-4 gap-3 p-4 rounded-2xl border-2 border-dashed transition-all",
+                      isDragging ? "border-nexus-accent bg-nexus-accent/5" : "border-white/5 bg-white/5"
+                    )}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
                     {attachedMedia.map((media, i) => (
                       <div key={i} className="aspect-square rounded-xl glass relative group overflow-hidden border-nexus-accent/20">
                         {media.type === "image" ? (
@@ -1831,10 +2081,20 @@ export const SocialControl = () => {
                       <button 
                         onClick={() => fileInputRef.current?.click()}
                         className="aspect-square rounded-xl border-2 border-dashed border-white/10 hover:border-nexus-accent/50 hover:bg-nexus-accent/5 transition-all flex flex-col items-center justify-center gap-2 text-nexus-text-dim hover:text-nexus-accent"
+                        id="media-upload-trigger"
                       >
-                        <UploadCloud className="w-6 h-6" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Upload</span>
+                        <UploadCloud className={cn("w-6 h-6", isDragging && "animate-bounce text-nexus-accent")} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">
+                          {isDragging ? "Drop to Attach" : "Attach Media"}
+                        </span>
                       </button>
+                    )}
+                    
+                    {attachedMedia.length === 0 && !isDragging && (
+                      <div className="col-span-4 py-8 flex flex-col items-center justify-center gap-2 opacity-50 pointer-events-none">
+                        <p className="text-xs">Drag and drop assets here or click to select</p>
+                        <p className="text-[9px] font-mono tracking-tighter">MAX 4 NEURAL ASSETS (IMG/VOD)</p>
+                      </div>
                     )}
                   </div>
                   <input 
@@ -1844,6 +2104,7 @@ export const SocialControl = () => {
                     multiple
                     accept="image/*,video/*"
                     className="hidden"
+                    id="file-upload-input"
                   />
                 </div>
 
@@ -1971,11 +2232,35 @@ export const SocialControl = () => {
                           <PlatformPresetManager platform="twitter" color="blue-400" />
 
                           <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                            <span className="text-[10px] text-nexus-text-dim uppercase">Character Limit</span>
+                            <span className="text-[10px] text-nexus-text-dim uppercase font-mono">Protocol Mode</span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setPlatformConfigs(prev => ({ ...prev, twitter: { ...prev.twitter, thread: false } }))}
+                                className={cn(
+                                  "px-2 py-1 rounded text-[10px] border transition-all",
+                                  !platformConfigs.twitter.thread ? "bg-blue-400/20 border-blue-400 text-blue-400" : "bg-white/5 border-white/5 text-nexus-text-dim"
+                                )}
+                              >
+                                SINGLE TWEET
+                              </button>
+                              <button
+                                onClick={() => setPlatformConfigs(prev => ({ ...prev, twitter: { ...prev.twitter, thread: true } }))}
+                                className={cn(
+                                  "px-2 py-1 rounded text-[10px] border transition-all",
+                                  platformConfigs.twitter.thread ? "bg-blue-400/20 border-blue-400 text-blue-400" : "bg-white/5 border-white/5 text-nexus-text-dim"
+                                )}
+                              >
+                                NEURAL THREAD
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-nexus-text-dim uppercase font-mono">Character Limit</span>
                             <select 
                               value={platformConfigs.twitter.charLimit}
                               onChange={(e) => setPlatformConfigs(prev => ({ ...prev, twitter: { ...prev.twitter, charLimit: parseInt(e.target.value) } }))}
-                              className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none"
+                              className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none hover:border-blue-400/30 transition-all"
                             >
                               <option value="280">280 (Standard)</option>
                               <option value="4000">4000 (Premium)</option>
@@ -1995,8 +2280,8 @@ export const SocialControl = () => {
 
                           <PlatformPresetManager platform="instagram" color="pink-500" />
 
-                          <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                            <span className="text-[10px] text-nexus-text-dim uppercase">Image Ratio</span>
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-nexus-text-dim uppercase font-mono">Image Ratio</span>
                             <div className="flex gap-2">
                               {["1:1", "4:5", "16:9"].map(ratio => (
                                 <button
@@ -2013,6 +2298,21 @@ export const SocialControl = () => {
                                 </button>
                               ))}
                             </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-nexus-text-dim uppercase font-mono">Auto-Crop Neural Assets</span>
+                            <button
+                              onClick={() => setPlatformConfigs(prev => ({ ...prev, instagram: { ...prev.instagram, autoCrop: !prev.instagram.autoCrop } }))}
+                              className={cn(
+                                "px-2 py-1 rounded text-[10px] border transition-all",
+                                platformConfigs.instagram.autoCrop 
+                                  ? "bg-pink-500/20 border-pink-500 text-pink-500" 
+                                  : "bg-white/5 border-white/5 text-nexus-text-dim"
+                              )}
+                            >
+                              {platformConfigs.instagram.autoCrop ? "ENABLED" : "DISABLED"}
+                            </button>
                           </div>
 
                           <CallbackSystemControl platform="instagram" />
@@ -2160,12 +2460,22 @@ export const SocialControl = () => {
                             <div className="space-y-4">
                               <PlatformPresetManager platform="youtube" color="red-500" />
                               
-                              <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                                <span className="text-[10px] text-nexus-text-dim uppercase">Visibility Settings</span>
+                              <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                <label className="text-[10px] text-nexus-text-dim uppercase font-mono">Video Description</label>
+                                <textarea 
+                                  value={platformConfigs.youtube.description}
+                                  onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, description: e.target.value } }))}
+                                  placeholder="Neural video metadata..."
+                                  className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-[10px] outline-none h-16 resize-none focus:border-red-500/30 transition-all"
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="text-[10px] text-nexus-text-dim uppercase font-mono">Visibility Settings</span>
                                 <select 
                                   value={platformConfigs.youtube.visibility}
                                   onChange={(e) => setPlatformConfigs(prev => ({ ...prev, youtube: { ...prev.youtube, visibility: e.target.value } }))}
-                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none"
+                                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none hover:border-red-500/30 transition-all"
                                 >
                                   <option value="public">🌍 Public (Broadcast)</option>
                                   <option value="unlisted">🔗 Unlisted</option>
@@ -2190,16 +2500,24 @@ export const SocialControl = () => {
                               <Linkedin className="w-4 h-4" />
                               <span className="text-xs font-bold uppercase tracking-wider">LinkedIn Settings</span>
                             </div>
-                            <button 
-                              onClick={() => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, isLive: !prev.linkedin.isLive } }))}
-                              className={cn(
-                                "px-3 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-2",
-                                platformConfigs.linkedin.isLive ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-600/20" : "bg-white/5 border-white/5 text-nexus-text-dim hover:border-blue-600/30"
+                            <div className="flex items-center gap-3">
+                              {connectedPlatforms.includes("linkedin") && (
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/20">
+                                  <Shield className="w-2.5 h-2.5" />
+                                  <span className="text-[8px] font-bold uppercase tracking-tighter">Secure Link</span>
+                                </div>
                               )}
-                            >
-                              <Play className="w-3 h-3" />
-                              LIVE STREAM
-                            </button>
+                              <button 
+                                onClick={() => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, isLive: !prev.linkedin.isLive } }))}
+                                className={cn(
+                                  "px-3 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-2",
+                                  platformConfigs.linkedin.isLive ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-600/20" : "bg-white/5 border-white/5 text-nexus-text-dim hover:border-blue-600/30"
+                                )}
+                              >
+                                <Play className="w-3 h-3" />
+                                LIVE STREAM
+                              </button>
+                            </div>
                           </div>
                           
                           {platformConfigs.linkedin.isLive && (
@@ -2302,12 +2620,22 @@ export const SocialControl = () => {
                             <div className="space-y-3">
                                <PlatformPresetManager platform="linkedin" color="blue-600" />
                                
-                               <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                                 <span className="text-[10px] text-nexus-text-dim uppercase">Visibility Level</span>
+                               <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                 <label className="text-[10px] text-nexus-text-dim uppercase font-mono">Post Description</label>
+                                 <textarea 
+                                   value={platformConfigs.linkedin.description}
+                                   onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, description: e.target.value } }))}
+                                   placeholder="Professional context..."
+                                   className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-[10px] outline-none h-16 resize-none focus:border-blue-600/30 transition-all"
+                                 />
+                               </div>
+
+                               <div className="flex items-center justify-between pt-1">
+                                 <span className="text-[10px] text-nexus-text-dim uppercase font-mono">Visibility Level</span>
                                  <select 
                                    value={platformConfigs.linkedin.visibility}
                                    onChange={(e) => setPlatformConfigs(prev => ({ ...prev, linkedin: { ...prev.linkedin, visibility: e.target.value } }))}
-                                   className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none"
+                                   className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] outline-none hover:border-blue-600/30 transition-all"
                                  >
                                    <option value="Public">🌍 Public</option>
                                    <option value="Connections Only">👥 Connections Only</option>
@@ -2322,9 +2650,17 @@ export const SocialControl = () => {
 
                       {selectedPlatforms.includes("facebook") && (
                         <div className="p-4 rounded-2xl bg-blue-600/5 border border-blue-600/10 space-y-3 relative overflow-hidden group">
-                          <div className="flex items-center gap-2 text-blue-600 mb-2">
-                            <Settings2 className="w-4 h-4" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Facebook Protocol</span>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 text-blue-600">
+                              <Facebook className="w-4 h-4" />
+                              <span className="text-xs font-bold uppercase tracking-wider">Facebook Protocol</span>
+                            </div>
+                            {connectedPlatforms.includes("facebook") && (
+                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                                <Shield className="w-2.5 h-2.5" />
+                                <span className="text-[8px] font-bold uppercase tracking-tighter">Secure Link</span>
+                              </div>
+                            )}
                           </div>
 
                           <PlatformPresetManager platform="facebook" color="blue-600" />

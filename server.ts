@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import axios from "axios";
 import dotenv from "dotenv";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ async function startServer() {
       tokenUrl: "https://www.linkedin.com/oauth/v2/accessToken",
       clientId: process.env.LINKEDIN_CLIENT_ID,
       clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
-      scope: "r_liteprofile r_emailaddress w_member_social",
+      scope: "openid profile email w_member_social",
     },
     google: {
       authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -102,6 +103,23 @@ async function startServer() {
       params.append("prompt", "consent");
     }
 
+    // Twitter specific PKCE
+    if (provider === "twitter") {
+      const codeVerifier = crypto.randomBytes(32).toString('base64url');
+      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+      
+      // Store code_verifier in cookie
+      res.cookie(`pkce_${provider}`, codeVerifier, { 
+        httpOnly: true, 
+        secure: true, 
+        sameSite: 'none', 
+        maxAge: 300000 // 5 minutes
+      });
+      
+      params.append("code_challenge", codeChallenge);
+      params.append("code_challenge_method", "S256");
+    }
+
     res.json({ url: `${config.authUrl}?${params.toString()}` });
   });
 
@@ -123,14 +141,33 @@ async function startServer() {
       params.append("code", code as string);
       params.append("redirect_uri", redirectUri);
       params.append("client_id", config.clientId);
-      params.append("client_secret", config.clientSecret);
+      
+      // Some providers want client_secret in body, some in headers
+      if (config.clientSecret) {
+        params.append("client_secret", config.clientSecret);
+      }
 
-      const tokenResponse = await axios.post(config.tokenUrl, params, {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-      });
+      // Twitter PKCE verification
+      if (provider === "twitter") {
+        const codeVerifier = req.cookies[`pkce_${provider}`];
+        if (codeVerifier) {
+          params.append("code_verifier", codeVerifier);
+          res.clearCookie(`pkce_${provider}`);
+        }
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      };
+
+      // Twitter often prefers Basic Auth for client credentials
+      if (provider === "twitter" && config.clientId && config.clientSecret) {
+        const auth = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
+        headers["Authorization"] = `Basic ${auth}`;
+      }
+
+      const tokenResponse = await axios.post(config.tokenUrl, params, { headers });
 
       const tokens = tokenResponse.data;
       
@@ -161,7 +198,28 @@ async function startServer() {
       `);
     } catch (error: any) {
       console.error(`OAuth Error (${provider}):`, error.response?.data || error.message);
-      res.status(500).send(`Authentication failed: ${error.message}`);
+      const errorDetail = error.response?.data?.error_description || error.response?.data?.error || error.message;
+      
+      res.send(`
+        <html>
+          <body style="background: #0f0f14; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+            <div style="text-align: center; padding: 2rem; border-radius: 1rem; background: rgba(255,10,10,0.05); border: 1px solid rgba(255,0,0,0.3);">
+              <h2 style="color: #ff4545; margin-bottom: 1rem;">Neural Link Failed</h2>
+              <p style="color: rgba(255,255,255,0.6);">${errorDetail}</p>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ 
+                    type: 'OAUTH_AUTH_FAILURE', 
+                    provider: '${provider}',
+                    error: '${errorDetail.replace(/'/g, "\\'")}'
+                  }, '*');
+                  setTimeout(() => window.close(), 3000);
+                }
+              </script>
+            </div>
+          </body>
+        </html>
+      `);
     }
   });
 
