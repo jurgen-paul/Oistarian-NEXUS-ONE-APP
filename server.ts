@@ -55,6 +55,13 @@ async function startServer() {
       clientId: process.env.FACEBOOK_CLIENT_ID,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
       scope: "email public_profile publish_video",
+    },
+    instagram: {
+      authUrl: "https://api.instagram.com/oauth/authorize",
+      tokenUrl: "https://api.instagram.com/oauth/access_token",
+      clientId: process.env.INSTAGRAM_CLIENT_ID,
+      clientSecret: process.env.INSTAGRAM_CLIENT_SECRET,
+      scope: "user_profile,user_media",
     }
   };
 

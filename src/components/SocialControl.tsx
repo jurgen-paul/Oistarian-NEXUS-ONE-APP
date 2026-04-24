@@ -67,7 +67,7 @@ interface ScheduledPost {
 }
 
 const PLATFORMS = [
-  { id: "instagram", name: "Instagram", icon: Instagram, color: "text-pink-500", provider: "google" },
+  { id: "instagram", name: "Instagram", icon: Instagram, color: "text-pink-500", provider: "instagram" },
   { id: "twitter", name: "Twitter / X", icon: Twitter, color: "text-blue-400", provider: "twitter" },
   { id: "linkedin", name: "LinkedIn", icon: Linkedin, color: "text-blue-600", provider: "linkedin" },
   { id: "github", name: "GitHub", icon: Github, color: "text-white", provider: "github" },
@@ -106,6 +106,7 @@ export const SocialControl = () => {
   const [connectionError, setConnectionError] = useState<{provider: string, message: string} | null>(null);
   const [showLinkedInDiagnostic, setShowLinkedInDiagnostic] = useState(false);
   const [showFacebookDiagnostic, setShowFacebookDiagnostic] = useState(false);
+  const [showInstagramDiagnostic, setShowInstagramDiagnostic] = useState(false);
   const [tokens, setTokens] = useState<Record<string, any>>({});
   const [isInitiatingLive, setIsInitiatingLive] = useState(false);
   const [postFilter, setPostFilter] = useState<"All" | "Scheduled" | "Draft">("All");
@@ -527,6 +528,7 @@ export const SocialControl = () => {
         setConnectionError(null);
         setShowLinkedInDiagnostic(false);
         setShowFacebookDiagnostic(false);
+        setShowInstagramDiagnostic(false);
       } else if (event.data?.type === 'OAUTH_AUTH_FAILURE') {
         const { provider, error } = event.data;
         setConnectionError({ provider, message: error || "Authentication failed" });
@@ -535,6 +537,8 @@ export const SocialControl = () => {
           setShowLinkedInDiagnostic(true);
         } else if (provider === 'facebook') {
           setShowFacebookDiagnostic(true);
+        } else if (provider === 'instagram') {
+          setShowInstagramDiagnostic(true);
         }
       }
     };
@@ -1338,7 +1342,83 @@ export const SocialControl = () => {
               )}
             </AnimatePresence>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Instagram Neural Diagnostic Interface */}
+          <AnimatePresence>
+            {showInstagramDiagnostic && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="glass p-6 rounded-3xl border border-pink-500/20 bg-pink-500/5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Instagram className="w-5 h-5 text-pink-500" />
+                      <h4 className="text-sm font-bold uppercase tracking-widest text-pink-500">Instagram Protocol Failure</h4>
+                    </div>
+                    <button 
+                      onClick={() => setShowInstagramDiagnostic(false)}
+                      className="p-1 hover:bg-white/10 rounded-lg transition-all"
+                    >
+                      <X className="w-4 h-4 text-nexus-text-dim" />
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-black/40 border border-white/5 font-mono text-[11px] space-y-2">
+                      <p className="text-nexus-text-dim uppercase tracking-tighter">ERROR: <span className="text-red-400">{connectionError?.message || "IG-LINK-ERR-12"}</span></p>
+                      <p className="text-white/80 leading-relaxed italic border-l-2 border-pink-500 pl-3">
+                        "Instagram Basic Display API synchronization failed. Neural tether rejected by the visual sub-node."
+                      </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-nexus-text-dim">Visual Rejection Log</p>
+                        <ul className="space-y-1.5">
+                          {[
+                            "User declined permission for media synthesis.",
+                            "Invalid Client ID or Client Secret in environment vault.",
+                            "Mismatched OAuth redirect URI in Instagram dashboard.",
+                            "API legacy mode detected. Upgrade to Graph API requested."
+                          ].map((cause, i) => (
+                            <li key={i} className="flex items-center gap-2 text-[10px] text-white/60">
+                              <Activity className="w-3 h-3 text-pink-500/50" />
+                              {cause}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-nexus-accent">Quantum Recovery</p>
+                        <div className="space-y-2">
+                          <button 
+                            onClick={() => handleConnect('instagram')}
+                            className="w-full py-2 bg-nexus-accent text-black text-[10px] font-bold rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+                          >
+                            <Zap className="w-3 h-3" />
+                            RE-ESTABLISH VISUAL LINK
+                          </button>
+                          <a 
+                            href="https://www.instagram.com/developer/" 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="w-full py-2 bg-white/5 border border-white/10 text-white text-[10px] font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-all font-mono"
+                          >
+                            <Monitor className="w-3 h-3" />
+                            INSTAGRAM DEV CONSOLE
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-6">
                 <div className="glass p-6 rounded-3xl">
                   <div className="flex items-center justify-between mb-6">
@@ -2273,9 +2353,17 @@ export const SocialControl = () => {
 
                       {selectedPlatforms.includes("instagram") && (
                         <div className="p-4 rounded-2xl bg-pink-500/5 border border-pink-500/10 space-y-3 relative overflow-hidden group">
-                          <div className="flex items-center gap-2 text-pink-500 mb-2">
-                            <Instagram className="w-4 h-4" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Instagram Protocol</span>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 text-pink-500">
+                              <Instagram className="w-4 h-4" />
+                              <span className="text-xs font-bold uppercase tracking-wider">Instagram Protocol</span>
+                            </div>
+                            {connectedPlatforms.includes("instagram") && (
+                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-pink-500/10 text-pink-500 border border-pink-500/20">
+                                <Shield className="w-2.5 h-2.5" />
+                                <span className="text-[8px] font-bold uppercase tracking-tighter">Secure Link</span>
+                              </div>
+                            )}
                           </div>
 
                           <PlatformPresetManager platform="instagram" color="pink-500" />
