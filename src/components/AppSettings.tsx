@@ -16,17 +16,36 @@ import {
   EyeOff,
   Cloud,
   Lock,
-  Smartphone
+  Smartphone,
+  Search,
+  ArrowRight
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 export const AppSettings = () => {
   const [activeTab, setActiveTab] = useState<"profile" | "neural" | "api" | "security">("profile");
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   const toggleKey = (key: string) => {
     setShowKeys(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const allSettings = [
+    { id: "alias", label: "Neural Alias", tab: "profile", icon: User },
+    { id: "email", label: "Encryption Email", tab: "profile", icon: Globe },
+    { id: "rank", label: "System Rank", tab: "profile", icon: Shield },
+    { id: "theme", label: "Interface Aesthetics", tab: "neural", icon: Monitor },
+    { id: "animations", label: "Animation Dynamics", tab: "neural", icon: Zap },
+    { id: "keys", label: "Neural Key Matrix", tab: "api", icon: Key },
+    { id: "2fa", label: "Neural Biometrics", tab: "security", icon: Shield },
+    { id: "encryption", label: "Zero-Knowledge Encryption", tab: "security", icon: Lock },
+    { id: "logging", label: "Quantum Activity Logging", tab: "security", icon: Zap },
+  ];
+
+  const filteredSettings = allSettings.filter(s => 
+    s.label.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const tabs = [
     { id: "profile", label: "Identity", icon: User },
@@ -137,6 +156,60 @@ export const AppSettings = () => {
                 animate={{ opacity: 1, x: 0 }}
                 className="space-y-8"
               >
+                {/* Global Search Interface */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                    <Search className={cn(
+                      "w-4 h-4 transition-colors duration-300",
+                      searchQuery ? "text-nexus-accent" : "text-nexus-text-dim"
+                    )} />
+                  </div>
+                  <input 
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="QUERY NEURAL CONFIGURATIONS..."
+                    className="w-full bg-nexus-accent/5 border border-nexus-accent/20 rounded-2xl py-4 pl-12 pr-4 text-xs font-mono font-bold tracking-widest text-white outline-none focus:border-nexus-accent/50 focus:bg-nexus-accent/10 transition-all placeholder:text-nexus-text-dim/50"
+                  />
+                  {searchQuery && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute top-full left-0 right-0 mt-2 p-2 glass border border-nexus-accent/20 rounded-2xl z-50 max-h-64 overflow-y-auto scrollbar-none shadow-2xl"
+                    >
+                      {filteredSettings.length > 0 ? (
+                        <div className="space-y-1">
+                          {filteredSettings.map(setting => (
+                            <button
+                              key={setting.id}
+                              onClick={() => {
+                                setActiveTab(setting.tab as any);
+                                setSearchQuery("");
+                              }}
+                              className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-nexus-accent/10 group transition-all"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-white/5 group-hover:bg-nexus-accent/20">
+                                  <setting.icon className="w-4 h-4 text-nexus-accent" />
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-xs font-bold text-white uppercase tracking-wider">{setting.label}</p>
+                                  <p className="text-[9px] text-nexus-text-dim uppercase font-mono">{setting.tab} matrix</p>
+                                </div>
+                              </div>
+                              <ArrowRight className="w-3 h-3 text-nexus-text-dim group-hover:text-nexus-accent transition-all opacity-0 group-hover:opacity-100" />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center">
+                          <p className="text-[10px] text-nexus-text-dim uppercase tracking-widest font-mono">No matching configurations found</p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </div>
+
                 <div className="space-y-6">
                   <h4 className="text-sm font-bold text-nexus-accent uppercase tracking-widest flex items-center gap-2">
                     <Monitor className="w-4 h-4" />
