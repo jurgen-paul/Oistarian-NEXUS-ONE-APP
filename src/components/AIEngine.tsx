@@ -78,7 +78,9 @@ export const AIEngine = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>("16:9");
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>("1:1");
+  const [selectedImageSize, setSelectedImageSize] = useState<string>("1K");
+  const [isImageMode, setIsImageMode] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [personality, setPersonality] = useState<PersonalityMode>("Stealth");
   const [isCapturingVoice, setIsCapturingVoice] = useState(false);
@@ -185,43 +187,54 @@ export const AIEngine = () => {
 
   const generateImage = async (prompt: string) => {
     setIsGeneratingImage(true);
-    setMessages(prev => [...prev, { role: "user", content: `Generate an image: ${prompt}` }]);
+    setMessages(prev => [...prev, { role: "user", content: `Neural Visual Synthesis: ${prompt}` }]);
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3.1-flash-image-preview',
         contents: {
           parts: [
-            { text: `Create a futuristic, high-resolution visual representing: ${prompt}. Cinematic lighting, 8k, nexus-style aesthetic.` },
+            { text: `Synthesize a high-fidelity, futuristic NEXUS visual: ${prompt}. Cinematic lighting, hyper-detailed, 8k resolution, sci-fi aesthetic.` },
           ],
         },
         config: {
           imageConfig: {
-            aspectRatio: selectedAspectRatio
+            aspectRatio: selectedAspectRatio,
+            imageSize: selectedImageSize
           }
         }
       });
 
       let foundImage = false;
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
-          setMessages(prev => [...prev, { 
-            role: "assistant", 
-            content: "Visual synthesis complete. Here is the generated neural asset.",
-            type: "image",
-            attachments: [imageUrl],
-            personality
-          }]);
-          foundImage = true;
-          break;
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+            setMessages(prev => [...prev, { 
+              role: "assistant", 
+              content: `Visual synthesis complete for protocol: ${prompt}. Aspect Ratio: ${selectedAspectRatio} | Output: ${selectedImageSize}`,
+              type: "image",
+              attachments: [imageUrl],
+              personality
+            }]);
+            foundImage = true;
+            break;
+          }
         }
       }
-      if (!foundImage) throw new Error("No image data found");
-    } catch (error) {
+      
+      if (!foundImage) {
+        throw new Error("Neural link failed to transmit visual data.");
+      }
+    } catch (error: any) {
       console.error("Image Gen Error:", error);
-      setMessages(prev => [...prev, { role: "assistant", content: "Visual synthesis failed. Neural link too weak for image transmission.", personality }]);
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: `Visual synthesis failed: ${error.message || "Unknown neural interference"}.`, 
+        personality 
+      }]);
     } finally {
       setIsGeneratingImage(false);
+      setIsImageMode(false);
     }
   };
 
@@ -232,8 +245,8 @@ export const AIEngine = () => {
     setInput("");
 
     // Special command handling
-    if (userMessage.toLowerCase().startsWith("/image") || userMessage.toLowerCase().startsWith("generate image")) {
-      const prompt = userMessage.replace(/^(\/image|generate image)\s*/i, "");
+    if (isImageMode || userMessage.toLowerCase().startsWith("/image") || userMessage.toLowerCase().startsWith("generate image")) {
+      const prompt = isImageMode ? userMessage : userMessage.replace(/^(\/image|generate image)\s*/i, "");
       if (prompt) {
         generateImage(prompt);
         return;
@@ -418,27 +431,56 @@ export const AIEngine = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder={isGeneratingImage ? "Describing neural asset..." : "Initiate command interface..."}
+            placeholder={isGeneratingImage ? "Describing neural asset..." : isImageMode ? "Describe visual for synthesis... (Ex: Futurism city, 8k)" : "Initiate command interface..."}
             className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-nexus-text-dim py-2"
           />
           <div className="flex items-center gap-1 pr-2">
             <div className="relative group/ratio">
-              <button className="p-2 hover:bg-white/5 text-nexus-text-dim transition-all rounded-xl flex items-center gap-1">
+              <button 
+                className={cn(
+                  "p-2 hover:bg-white/5 transition-all rounded-xl flex items-center gap-1",
+                  isImageMode ? "text-nexus-accent" : "text-nexus-text-dim"
+                )}
+                onClick={() => setIsImageMode(!isImageMode)}
+              >
+                <ImageIcon className="w-4 h-4" />
                 <span className="text-[10px] font-mono font-bold">{selectedAspectRatio}</span>
               </button>
-              <div className="absolute bottom-full right-0 mb-2 p-1 glass border border-white/10 rounded-xl hidden group-hover/ratio:block min-w-[80px] z-50">
-                {["1:1", "16:9", "9:16", "4:3", "3:2"].map(ratio => (
-                  <button
-                    key={ratio}
-                    onClick={() => setSelectedAspectRatio(ratio)}
-                    className={cn(
-                      "w-full text-left px-3 py-1.5 rounded-lg text-[10px] font-mono transition-colors",
-                      selectedAspectRatio === ratio ? "bg-nexus-accent text-black" : "text-nexus-text-dim hover:bg-white/5 hover:text-white"
-                    )}
-                  >
-                    {ratio}
-                  </button>
-                ))}
+              <div className="absolute bottom-full right-0 mb-2 p-1 glass border border-white/10 rounded-xl hidden group-hover/ratio:block min-w-[120px] z-50">
+                <div className="p-2 border-b border-white/5">
+                  <p className="text-[8px] font-mono text-nexus-text-dim uppercase mb-2">Aspect Ratio</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {["1:1", "16:9", "9:16", "4:3", "3:2", "1:4", "8:1"].map(ratio => (
+                      <button
+                        key={ratio}
+                        onClick={() => setSelectedAspectRatio(ratio)}
+                        className={cn(
+                          "px-2 py-1 rounded-lg text-[9px] font-mono transition-colors",
+                          selectedAspectRatio === ratio ? "bg-nexus-accent text-black" : "text-nexus-text-dim hover:bg-white/5 hover:text-white"
+                        )}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-2">
+                  <p className="text-[8px] font-mono text-nexus-text-dim uppercase mb-2">Resolution</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {["512px", "1K", "2K", "4K"].map(size => (
+                      <button
+                        key={size}
+                        onClick={() => setSelectedImageSize(size)}
+                        className={cn(
+                          "px-2 py-1 rounded-lg text-[9px] font-mono transition-colors",
+                          selectedImageSize === size ? "bg-nexus-accent text-black" : "text-nexus-text-dim hover:bg-white/5 hover:text-white"
+                        )}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
             <button 
@@ -452,8 +494,12 @@ export const AIEngine = () => {
               <Mic className="w-4 h-4" />
             </button>
             <button 
-              onClick={() => setInput("/image ")}
-              className="p-2 hover:bg-white/5 text-nexus-text-dim transition-all rounded-xl"
+              onClick={() => setIsImageMode(!isImageMode)}
+              className={cn(
+                "p-2 transition-all rounded-xl",
+                isImageMode ? "bg-nexus-accent text-black animate-pulse" : "hover:bg-white/5 text-nexus-text-dim"
+              )}
+              title="Toggle Image Synthesis Mode"
             >
               <Camera className="w-4 h-4" />
             </button>
@@ -461,9 +507,12 @@ export const AIEngine = () => {
           <button 
             onClick={handleSend}
             disabled={isLoading || isGeneratingImage || !input.trim()}
-            className="p-3 bg-nexus-accent text-black rounded-xl hover:bg-white transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(5,255,161,0.2)]"
+            className={cn(
+              "p-3 rounded-xl transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(5,255,161,0.2)]",
+              isImageMode ? "bg-purple-500 text-white" : "bg-nexus-accent text-black hover:bg-white"
+            )}
           >
-            <Send className="w-4 h-4" />
+            {isImageMode ? <Sparkles className="w-4 h-4" /> : <Send className="w-4 h-4" />}
           </button>
         </div>
         

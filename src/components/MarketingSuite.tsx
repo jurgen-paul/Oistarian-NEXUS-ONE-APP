@@ -14,7 +14,10 @@ import {
   Sparkles,
   DollarSign,
   Share2,
-  Layout
+  Layout,
+  Save,
+  Trash2,
+  Bookmark
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { GoogleGenAI, Type as GenAIType } from "@google/genai";
@@ -104,6 +107,25 @@ export const MarketingSuite = () => {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [abTests, setAbTests] = useState<ABTest[]>(INITIAL_AB_TESTS);
   const [activeTab, setActiveTab] = useState<"insights" | "campaigns" | "ab-testing">("insights");
+  const [presets, setPresets] = useState<{ name: string; prompt: string }[]>(() => {
+    const saved = localStorage.getItem("nexus_marketing_presets");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [presetName, setPresetName] = useState("");
+
+  const savePreset = () => {
+    if (!presetName.trim() || !prompt.trim()) return;
+    const newPresets = [...presets, { name: presetName, prompt }];
+    setPresets(newPresets);
+    localStorage.setItem("nexus_marketing_presets", JSON.stringify(newPresets));
+    setPresetName("");
+  };
+
+  const deletePreset = (index: number) => {
+    const newPresets = presets.filter((_, i) => i !== index);
+    setPresets(newPresets);
+    localStorage.setItem("nexus_marketing_presets", JSON.stringify(newPresets));
+  };
 
   const generateCampaign = async () => {
     if (!prompt.trim() || isGenerating) return;
@@ -233,6 +255,30 @@ export const MarketingSuite = () => {
               <div className="p-8 space-y-6 overflow-y-auto">
                 {!campaign && !isGenerating ? (
                   <div className="space-y-6">
+                    {presets.length > 0 && (
+                      <div>
+                        <label className="text-xs font-mono text-nexus-text-dim uppercase tracking-widest mb-3 block">Neural Presets</label>
+                        <div className="flex flex-wrap gap-2">
+                          {presets.map((p, i) => (
+                            <div key={i} className="flex items-center gap-1 group">
+                              <button
+                                onClick={() => setPrompt(p.prompt)}
+                                className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-wider text-nexus-text-dim hover:text-nexus-accent hover:border-nexus-accent/30 transition-all"
+                              >
+                                {p.name}
+                              </button>
+                              <button 
+                                onClick={() => deletePreset(i)}
+                                className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-nexus-text-dim hover:text-red-400 hover:border-red-400/30 opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div>
                       <label className="text-xs font-mono text-nexus-text-dim uppercase tracking-widest mb-3 block">Campaign Brief / Prompt</label>
                       <textarea 
@@ -242,6 +288,27 @@ export const MarketingSuite = () => {
                         className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm outline-none focus:border-nexus-accent/50 transition-colors resize-none"
                       />
                     </div>
+
+                    {prompt.trim() && (
+                      <div className="flex gap-2">
+                        <input 
+                          type="text"
+                          value={presetName}
+                          onChange={(e) => setPresetName(e.target.value)}
+                          placeholder="PRESET NAME..."
+                          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-mono outline-none focus:border-nexus-accent/30 transition-colors"
+                        />
+                        <button 
+                          onClick={savePreset}
+                          disabled={!presetName.trim()}
+                          className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-nexus-text-dim hover:text-white hover:bg-white/10 transition-all flex items-center gap-2 disabled:opacity-50"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          SAVE AS PRESET
+                        </button>
+                      </div>
+                    )}
+
                     <button 
                       onClick={generateCampaign}
                       disabled={!prompt.trim()}

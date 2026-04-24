@@ -40,6 +40,20 @@ async function startServer() {
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
       scope: "user repo",
+    },
+    twitter: {
+      authUrl: "https://twitter.com/i/oauth2/authorize",
+      tokenUrl: "https://api.twitter.com/2/oauth2/token",
+      clientId: process.env.TWITTER_CLIENT_ID,
+      clientSecret: process.env.TWITTER_CLIENT_SECRET,
+      scope: "tweet.read tweet.write users.read offline.access",
+    },
+    facebook: {
+      authUrl: "https://www.facebook.com/v12.0/dialog/oauth",
+      tokenUrl: "https://graph.facebook.com/v12.0/oauth/access_token",
+      clientId: process.env.FACEBOOK_CLIENT_ID,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+      scope: "email public_profile publish_video",
     }
   };
 
